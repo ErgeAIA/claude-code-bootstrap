@@ -2,7 +2,7 @@
 
 # Claude Code Bootstrap
 
-**一键拉起 Claude Code 工作环境（Windows PowerShell）​**
+**一键拉起 Claude Code 工作环境（Windows PowerShell）**
 
 [![GitHub](https://img.shields.io/badge/GitHub-ErgeAIA-181717?logo=github)](https://github.com/ErgeAIA/claude-code-bootstrap)
 [![Gitee](https://img.shields.io/badge/Gitee-镜像仓库-C71D23?logo=gitee)](https://gitee.com/ErgeAIA/claude-code-bootstrap)
@@ -30,15 +30,15 @@
 
 **以管理员身份打开 PowerShell**，执行：
 
-\`\`\`powershell
+```powershell
 iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 | iex
-\`\`\`
+```
 
 国内网络推荐（自动测速，优先 Gitee）：
 
-\`\`\`powershell
+```powershell
 iwr https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1 | iex
-\`\`\`
+```
 
 脚本会自动：
 1. 测速选择最快镜像源
@@ -57,19 +57,21 @@ iwr https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1 | iex
 | -------------------- | ----------------------------------------- |
 | 🛡️ **三级兜底安装**   | native (GCS) → winget → npm，任一成功即停 |
 | ⏱️ **超时自动切换**   | native 60 秒无响应自动降级，避免卡死      |
-| 🔐 **SHA256 校验**    | 二进制大小 + 校验和双重验证，防中间人     |
+| 🔐 **SHA256 校验**    | 二进制 + hooks 双重校验，防供应链攻击     |
 | 🔄 **幂等运行**       | 已装组件自动跳过，可重复执行              |
 | 🪞 **智能镜像选源**   | Gitee / GitHub 自动测速，优先最快         |
 | 🔁 **下载重试**       | 网络抖动自动重试 3 次                     |
 | 🛣️ **PATH 自动维护**  | native / winget / npm 三种位置都处理      |
 | 🪝 **hooks 一键部署** | disler 6 个核心 hooks + status_line_v6    |
 | 📋 **依赖自检**       | PowerShell、Git、UV、Node.js 缺啥补啥     |
+| 🔒 **hooks 安全校验** | SHA256 校验防篡改，校验失败自动删除       |
+| 🌐 **hooks 双源下载** | Gitee + GitHub 双源，国内优先 Gitee       |
 
 ## 📦 包含内容
 
 部署完成后，`~/.claude/` 目录结构如下：
 
-\`\`\`
+```
 ~/.claude/
 ├── hooks/
 │   ├── pre_tool_use.py              # 工具调用前安全检查
@@ -81,13 +83,13 @@ iwr https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1 | iex
 ├── status_lines/
 │   └── status_line_v6.py            # 上下文窗口使用率监控
 └── logs/                            # hooks 自动生成的 JSON 日志
-\`\`\`
+```
 
 ## ⚙️ 高级用法
 
 ### 指定安装版本
 
-\`\`\`powershell
+```powershell
 # 安装最新稳定版（默认）
 .\setup-claude.ps1
 
@@ -99,7 +101,7 @@ iwr https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1 | iex
 
 # 自定义 native 安装超时时间
 .\setup-claude.ps1 -InstallTimeout 120
-\`\`\`
+```
 
 ### 与 cc-switch 配合
 
@@ -111,7 +113,7 @@ iwr https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1 | iex
 
 | 方式              | 文件位置                               | 是否自动配 PATH | 何时使用                     |
 | ----------------- | -------------------------------------- | --------------- | ---------------------------- |
-| **native (GCS)​** | `~/.local/bin/claude.exe`              | ✅ 我们处理      | **默认首选**（官方推荐）     |
+| **native (GCS)**  | `~/.local/bin/claude.exe`              | ✅ 我们处理      | **默认首选**（官方推荐）     |
 | **winget**        | `%LocalAppData%\Programs\claude-code\` | ✅ 通常自动      | native 超时/被墙时           |
 | **npm**           | `%AppData%\Roaming\npm\claude.cmd`     | ✅ 通常自动      | 上面都失败时（官方已不推荐） |
 
@@ -130,14 +132,20 @@ iwr https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1 | iex
 
 ## 🗂️ 项目结构
 
-\`\`\`
+```
 claude-code-bootstrap/
-├── install.ps1          # 入口脚本（智能选源 + 自动重试）
-├── setup-claude.ps1     # 主体脚本（环境检测 + 安装 + 部署）
-├── README.md            # 本文件
-├── LICENSE              # AGPL-3.0 协议
-└── CHANGELOG.md         # 更新日志
-\`\`\`
+├── install.ps1              # 入口脚本（智能选源 + 自动重试）
+├── setup-claude.ps1         # 主体脚本（环境检测 + 安装 + 部署）
+├── checksums.txt            # hooks 和 status_line 的 SHA256 校验和
+├── scripts/
+│   └── update-checksums.ps1 # 刷新 hooks SHA256 校验和
+├── .github/
+│   └── workflows/
+│       └── update-checksums.yml # 每周自动检测上游 hooks 变更
+├── README.md                # 本文件
+├── LICENSE                  # AGPL-3.0 协议
+└── CHANGELOG.md             # 更新日志
+```
 
 ## 🤝 贡献
 
