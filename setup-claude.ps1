@@ -39,7 +39,21 @@ $OutputEncoding           = [System.Text.Encoding]::UTF8
 #  常量
 # ============================================================
 $GCS_BUCKET   = 'https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases'
-$REPO_BASE    = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
+$REPO_BASES   = @(
+    'https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/.claude',
+    'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
+)
+
+# SHA256 checksums（与仓库根目录 checksums.txt 同步）
+$CHECKSUMS = @{
+    'pre_tool_use.py'         = '78006866F793CCD394BC52011582CE48707CEEF9D3496E474AB7BCB63365A5DA'
+    'post_tool_use.py'        = '6C3F0AA03CABC68670490A7CDAD6FC2364C94B074F9D6E317EA7C8ABE04C9449'
+    'session_start.py'        = 'E48E3D8F6D50A14DBBE4635E461C956A55F338D1DCA67ED39CACDBBF336C6DB8'
+    'user_prompt_submit.py'   = 'E5EFBCE941746900D9EF88706D865F2693DA721C6046330D954278939EB988A8'
+    'post_tool_use_failure.py'= '46BA935B917E7F8EAD0273E968BE09201E51016913F41A6E9E8DB908BE06D822'
+    'session_end.py'          = 'F316D341AE6A3A60E3E5A0DDD0DFD3360DA793A31E80B4B7B44C00F755E15426'
+    'status_line_v6.py'       = 'B71DEB25E7C2308B1AB134DFE686E4E6A50612AA4FB91C98CA98327B78A19803'
+}
 
 $CLAUDE_HOME  = Join-Path $env:USERPROFILE '.claude'
 $HOOK_DIR     = Join-Path $CLAUDE_HOME 'hooks'
@@ -114,7 +128,10 @@ function Test-Prerequisites {
     } else {
         Write-Warn2 'UV 未安装，正在自动安装...'
         try {
-            Invoke-RestMethod 'https://astral.sh/uv/install.ps1' | Invoke-Expression
+            # trust-on-first-use: 官方安装脚本内容随版本变化，无法 pin 固定哈希
+            # 安全依赖 HTTPS 传输层保护 + 安装后二进制验证
+            $uvInstallScript = Invoke-RestMethod 'https://astral.sh/uv/install.ps1' -TimeoutSec 30
+            $uvInstallScript | Invoke-Expression
             if (Has-Command 'uv') {
                 Write-Ok 'UV 安装成功'
             } else {
@@ -181,7 +198,7 @@ function Install-Native {
         Move-Item -Force $binaryPath $finalPath
         Copy-Item -Force $finalPath $LINK_PATH
 
-        return 
+        return @{ Version = $version }
     } -ArgumentList $GCS_BUCKET, $arch, $tmpDir, $VERSIONS_DIR, $BIN_DIR, $LINK_PATH, $ClaudeVersion
 
     $finished = Wait-Job $job -Timeout $InstallTimeout
@@ -201,11 +218,11 @@ function Install-Native {
     Remove-Job $job -Force
 
     # 写 .claude.json 标记 native
-    $cfg = 
+    $cfg = @{}
     if (Test-Path $CONFIG_PATH) {
         try { $cfg = Get-Content -Raw $CONFIG_PATH | ConvertFrom-Json -AsHashtable } catch {}
-        if (-not $cfg) { $cfg =  }
     }
+    if ($null -eq $cfg) { $cfg = @{} }
     $cfg['installMethod'] = 'native'
     $cfg['autoUpdates']   = $false
     if (-not $cfg.ContainsKey('firstStartTime')) {
@@ -323,9 +340,9 @@ function Install-ClaudeCode {
     }
 
     $methods = @(
-         },
-         },
-         }
+        @{ Name = 'Native (GCS 直连)'; Action = { Install-Native } },
+        @{ Name = 'winget';            Action = { Install-Winget } },
+        @{ Name = 'npm';               Action = { Install-Npm } }
     )
 
     $succeeded = $null
@@ -352,23 +369,28 @@ function Install-ClaudeCode {
 # ============================================================
 function Invoke-DownloadFile {
     param(
-        [string]$Url,
+        [string[]]$Urls,
         [string]$Dest,
         [int]$MaxRetry = 3
     )
-    for ($i = 1; $i -le $MaxRetry; $i++) {
-        try {
-            Invoke-WebRequest -Uri $Url -OutFile $Dest -TimeoutSec 30 -ErrorAction Stop
-            if ((Test-Path $Dest) -and (Get-Item $Dest).Length -gt 0) {
-                return $true
+    foreach ($url in $Urls) {
+        for ($i = 1; $i -le $MaxRetry; $i++) {
+            try {
+                Invoke-WebRequest -Uri $url -OutFile $Dest -TimeoutSec 30 -ErrorAction Stop
+                if ((Test-Path $Dest) -and (Get-Item $Dest).Length -gt 0) {
+                    return $true
+                }
+                throw '下载文件为空'
+            } catch {
+                if ($i -eq $MaxRetry) {
+                    Write-Warn2 "    源 $url 失败：$_"
+                    break
+                }
+                Start-Sleep -Seconds 2
             }
-            throw '下载文件为空'
-        } catch {
-            if ($i -eq $MaxRetry) { throw $_ }
-            Write-Warn2 "    第 $i 次失败：$_"
-            Start-Sleep -Seconds 2
         }
     }
+    throw "所有源均下载失败：$($Urls -join ', ')"
 }
 
 function Install-Hooks {
@@ -386,8 +408,20 @@ function Install-Hooks {
         }
         Write-Info "    [GET ] $f"
         try {
-            Invoke-DownloadFile -Url "$REPO_BASE/hooks/$f" -Dest $dest
-            Write-Ok "    $f"
+            $urls = $REPO_BASES | ForEach-Object { "$_/hooks/$f" }
+            Invoke-DownloadFile -Urls $urls -Dest $dest
+            # SHA256 校验
+            if ($CHECKSUMS.ContainsKey($f)) {
+                $actual = (Get-FileHash -Path $dest -Algorithm SHA256).Hash.ToUpper()
+                $expected = $CHECKSUMS[$f].ToUpper()
+                if ($actual -ne $expected) {
+                    Remove-Item $dest -Force -ErrorAction SilentlyContinue
+                    throw "SHA256 mismatch: expected $expected, got $actual"
+                }
+                Write-Ok "    $f (SHA256 verified)"
+            } else {
+                Write-Warn2 "    $f (no checksum - skip verification)"
+            }
         } catch {
             Write-Err "    $f 下载失败：$_"
         }
@@ -399,8 +433,20 @@ function Install-Hooks {
     } else {
         Write-Info "  [GET ] $STATUS_LINE"
         try {
-            Invoke-DownloadFile -Url "$REPO_BASE/status_lines/$STATUS_LINE" -Dest $slDest
-            Write-Ok "  $STATUS_LINE"
+            $slUrls = $REPO_BASES | ForEach-Object { "$_/status_lines/$STATUS_LINE" }
+            Invoke-DownloadFile -Urls $slUrls -Dest $slDest
+            # SHA256 校验
+            if ($CHECKSUMS.ContainsKey($STATUS_LINE)) {
+                $actual = (Get-FileHash -Path $slDest -Algorithm SHA256).Hash.ToUpper()
+                $expected = $CHECKSUMS[$STATUS_LINE].ToUpper()
+                if ($actual -ne $expected) {
+                    Remove-Item $slDest -Force -ErrorAction SilentlyContinue
+                    throw "SHA256 mismatch: expected $expected, got $actual"
+                }
+                Write-Ok "  $STATUS_LINE (SHA256 verified)"
+            } else {
+                Write-Warn2 "  $STATUS_LINE (no checksum - skip verification)"
+            }
         } catch {
             Write-Err "  $STATUS_LINE 下载失败：$_"
         }

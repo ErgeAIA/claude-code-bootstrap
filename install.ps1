@@ -42,6 +42,8 @@ foreach ($src in $SOURCES) {
     Write-Host "  [ ] 尝试: $($src.Name)" -ForegroundColor Gray -NoNewline
     try {
         $content = (Invoke-WebRequest -Uri $src.Url -TimeoutSec $TIMEOUT_SEC -UseBasicParsing -ErrorAction Stop).Content
+        # trust-on-first-use: 脚本内容随版本变化，无法 pin 固定哈希
+        # 安全依赖 HTTPS 传输层保护 + 仓库完整性
         if ($content -and $content.Length -gt 100) {
             Set-Content -Path $tmpScript -Value $content -Encoding UTF8 -Force
             Write-Host "`r  [OK] $($src.Name)" -ForegroundColor Green
@@ -65,6 +67,11 @@ Write-Host ''
 Write-Host '  开始执行安装...' -ForegroundColor Cyan
 Write-Host ''
 
-# 移交到主体脚本
-& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $tmpScript @args
+# 移交到主体脚本（优先 pwsh.exe，回退 powershell.exe）
+$pwshCmd = if (Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
+try {
+    & $pwshCmd -NoLogo -NoProfile -ExecutionPolicy Bypass -File $tmpScript @args
+} finally {
+    Remove-Item $tmpScript -Force -ErrorAction SilentlyContinue
+}
 exit $LASTEXITCODE

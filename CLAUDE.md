@@ -69,6 +69,12 @@ claude-code-bootstrap/
 - 更新日志遵循 Keep a Changelog 格式
 - 双语维护（zh + en）
 
+### 双平台同步
+- 仓库同时维护 GitHub（origin）和 Gitee 两个远程
+- 每次推送到云端时，必须同时推送到两个平台：`git push origin <branch> && git push gitee <branch>`
+- 新建分支、标签同理，需同步到两个远程
+- 如果 Gitee 远程尚未配置，执行：`git remote add gitee https://gitee.com/ErgeAIA/claude-code-bootstrap.git`
+
 ## 注意事项
 
 - 本项目不写 `settings.json`，该部分由 cc-switch 的"通用配置片段"管理，避免冲突
