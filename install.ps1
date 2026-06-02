@@ -6,7 +6,7 @@
     顺序：Gitee（国内）→ GitHub（国外）→ 失败报错。
 .NOTES
     用户只需要这一条命令：
-    iwr https://raw.githubusercontent.com/GigaByte/claude-code-bootstrap/main/install.ps1 | iex
+    iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 | iex
 #>
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -20,11 +20,11 @@ $ProgressPreference       = 'SilentlyContinue'
 $SOURCES = @(
     @{
         Name = 'Gitee（国内推荐）'
-        Url  = 'https://gitee.com/GigaByte/claude-code-bootstrap/raw/main/setup-claude.ps1'
+        Url  = 'https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/setup-claude.ps1'
     },
     @{
         Name = 'GitHub（国外推荐）'
-        Url  = 'https://raw.githubusercontent.com/GigaByte/claude-code-bootstrap/main/setup-claude.ps1'
+        Url  = 'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/setup-claude.ps1'
     }
 )
 
