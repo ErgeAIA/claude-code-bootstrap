@@ -1,0 +1,19 @@
+# Claude Code Bootstrap — Git 忽略规则
+
+# 运行时生成
+logs/
+*.log
+
+# 系统文件
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# 临时文件
+*.tmp
+*.temp
+~$*
+
+# IDE
+.vscode/
+.idea/
