@@ -18,7 +18,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$REPO_BASE = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
+$REPO_BASES = @(
+    'https://gitee.com/disler/claude-code-hooks-mastery/raw/main/.claude',
+    'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
+)
 $ROOT_DIR  = Split-Path $PSScriptRoot -Parent
 
 $FILES = @{
@@ -40,20 +43,27 @@ Write-Host '  ==================' -ForegroundColor Cyan
 
 $newChecksums = [ordered]@{}
 foreach ($entry in $FILES.GetEnumerator() | Sort-Object Key) {
-    $url = "$REPO_BASE/$($entry.Key)"
     $tmpFile = Join-Path $env:TEMP $entry.Value
-    Write-Host "  [GET] $($entry.Value)..." -ForegroundColor Gray -NoNewline
-    try {
-        Invoke-WebRequest -Uri $url -OutFile $tmpFile -TimeoutSec 30 -ErrorAction Stop
-        $hash = (Get-FileHash -Path $tmpFile -Algorithm SHA256).Hash.ToUpper()
-        $newChecksums[$entry.Value] = $hash
-        Write-Host "`r  [OK]  $($entry.Value): $hash" -ForegroundColor Green
-    } catch {
-        Write-Host "`r  [ERR] $($entry.Value): $_" -ForegroundColor Red
-        throw
-    } finally {
-        Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+    $downloaded = $false
+    foreach ($base in $REPO_BASES) {
+        $url = "$base/$($entry.Key)"
+        Write-Host "  [GET] $($entry.Value) ($($base -match 'gitee' ? 'Gitee' : 'GitHub'))..." -ForegroundColor Gray -NoNewline
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $tmpFile -TimeoutSec 30 -ErrorAction Stop
+            $downloaded = $true
+            break
+        } catch {
+            Write-Host "`r  [RETRY] $($entry.Value) from $($base -match 'gitee' ? 'Gitee' : 'GitHub') failed" -ForegroundColor Yellow
+        }
     }
+    if (-not $downloaded) {
+        Write-Host "`r  [ERR] $($entry.Value): all sources failed" -ForegroundColor Red
+        throw "Failed to download $($entry.Value) from any source"
+    }
+    $hash = (Get-FileHash -Path $tmpFile -Algorithm SHA256).Hash.ToUpper()
+    $newChecksums[$entry.Value] = $hash
+    Write-Host "`r  [OK]  $($entry.Value): $hash" -ForegroundColor Green
+    Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
 }
 
 # ============================================================
@@ -113,7 +123,8 @@ Write-Host '  [OK] checksums.txt 已更新' -ForegroundColor Green
 #  更新 setup-claude.ps1 中的 $CHECKSUMS
 # ============================================================
 $setupPath = Join-Path $ROOT_DIR 'setup-claude.ps1'
-$setupContent = Get-Content -Raw $setupPath
+$utf8NoBom3 = [System.Text.UTF8Encoding]::new($false)
+$setupContent = [System.IO.File]::ReadAllText($setupPath, $utf8NoBom3)
 
 $checksumsBlock = "@{`n"
 foreach ($entry in $newChecksums.GetEnumerator()) {
@@ -134,8 +145,7 @@ if ($setupContent -match '(?s)\$CHECKSUMS\s*=\s*@\{.*?\}') {
 $checksumsBlock += "}"
 
 $setupContent = $setupContent -replace "(?s)\`$CHECKSUMS = @\{.*?\}", "`$CHECKSUMS = $checksumsBlock"
-$utf8NoBom2 = [System.Text.UTF8Encoding]::new($false)
-[System.IO.File]::WriteAllText($setupPath, $setupContent, $utf8NoBom2)
+[System.IO.File]::WriteAllText($setupPath, $setupContent, $utf8NoBom3)
 Write-Host '  [OK] setup-claude.ps1 $CHECKSUMS 已更新' -ForegroundColor Green
 
 Write-Host ''

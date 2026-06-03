@@ -1719,6 +1719,9 @@ try {
 
     Test-Prerequisites
 
+    # 防御性初始化
+    $settingsStrategy = 'fresh'
+
     # 检测现有配置（报告给用户，返回是否有冲突）
     $hasExisting = Test-ExistingConfig
 
