@@ -586,6 +586,66 @@ function Read-InstallMode {
 }
 
 # ============================================================
+#  现有配置检测（Full 模式写入前报告 + 自动备份）
+# ============================================================
+function Test-ExistingConfig {
+    $hasSettings   = Test-Path (Join-Path $CLAUDE_HOME 'settings.json')
+    $hasClaudeJson = Test-Path $CONFIG_PATH
+    $hooks  = @(Get-ChildItem $HOOK_DIR -Filter *.py -ErrorAction SilentlyContinue)
+    $sls    = @(Get-ChildItem $SL_DIR -Filter *.py -ErrorAction SilentlyContinue)
+    $hasHooks       = $hooks.Count -gt 0
+    $hasStatusLines = $sls.Count -gt 0
+
+    $found = $false
+    Write-Step '检测现有 Claude Code 配置'
+
+    if ($hasSettings) {
+        $sz = (Get-Item (Join-Path $CLAUDE_HOME 'settings.json')).Length
+        Write-Info "  [FOUND] ~/.claude/settings.json ($sz bytes)"
+        $found = $true
+    }
+    if ($hasClaudeJson) {
+        Write-Info '  [FOUND] ~/.claude.json'
+        $found = $true
+    }
+    if ($hasHooks) {
+        Write-Info "  [FOUND] ~/.claude/hooks/ ($($hooks.Count) 个 .py)"
+        $found = $true
+    }
+    if ($hasStatusLines) {
+        Write-Info "  [FOUND] ~/.claude/status_lines/ ($($sls.Count) 个 .py)"
+        $found = $true
+    }
+    if (-not $found) {
+        Write-Info '  [CLEAN] 首次部署，无冲突'
+    }
+    return $found
+}
+
+function Backup-SettingsJson {
+    $SETTINGS_PATH = Join-Path $CLAUDE_HOME 'settings.json'
+    if (-not (Test-Path $SETTINGS_PATH)) { return $null }
+
+    $BACKUP_DIR = Join-Path $CLAUDE_HOME 'backups'
+    New-Item -ItemType Directory -Force -Path $BACKUP_DIR | Out-Null
+
+    $stamp  = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $backup = Join-Path $BACKUP_DIR "settings.json.$stamp.bak"
+    Copy-Item $SETTINGS_PATH $backup -Force
+    Write-Ok "  备份到 $backup"
+
+    # 保留最近 10 个备份，清理更早的
+    $oldBackups = Get-ChildItem $BACKUP_DIR -Filter 'settings.json.*.bak' |
+                  Sort-Object Name -Descending |
+                  Select-Object -Skip 10
+    foreach ($ob in $oldBackups) {
+        Remove-Item $ob.FullName -Force -ErrorAction SilentlyContinue
+    }
+
+    return $backup
+}
+
+# ============================================================
 #  阶段 1：前置环境检测
 # ============================================================
 function Test-Prerequisites {
@@ -940,12 +1000,180 @@ function Install-ClaudeJson {
 }
 
 # ============================================================
+#  深度合并辅助函数
+# ============================================================
+
+# 从 hook 条目中提取 command 字符串（用于去重）
+function Get-HookCommand {
+    param([hashtable]$HookEntry)
+    if ($HookEntry.ContainsKey('command')) { return $HookEntry['command'] }
+    return $null
+}
+
+# 从 hook matcher 组中提取所有 command（用于去重）
+function Get-MatcherCommands {
+    param([hashtable]$MatcherEntry)
+    $cmds = @()
+    if ($MatcherEntry.ContainsKey('hooks')) {
+        foreach ($h in $MatcherEntry['hooks']) {
+            $c = Get-HookCommand $h
+            if ($null -ne $c) { $cmds += $c }
+        }
+    }
+    return $cmds
+}
+
+# 合并 hooks：按事件合并，每个事件内用户 hooks 保留 + 我们的 hooks 追加（按 command 去重）
+function Merge-Hooks {
+    param(
+        [hashtable]$Ours,
+        [hashtable]$Theirs
+    )
+    $result = @{}
+    # 先复制用户的所有事件
+    foreach ($evt in $Theirs.Keys) {
+        $result[$evt] = $Theirs[$evt]
+    }
+    # 遍历我们的 hooks，按事件追加
+    foreach ($evt in $Ours.Keys) {
+        $ourMatchers = @($Ours[$evt])
+        if (-not $result.ContainsKey($evt)) {
+            # 用户没有这个事件，直接用我们的
+            $result[$evt] = $ourMatchers
+            continue
+        }
+        # 用户已有该事件：收集用户已有的 command 集合
+        $userMatcherList = @($result[$evt])
+        $existingCmds = @{}
+        foreach ($um in $userMatcherList) {
+            foreach ($c in (Get-MatcherCommands $um)) {
+                $existingCmds[$c] = $true
+            }
+        }
+        # 追加我们的 matcher（按 command 去重）
+        foreach ($om in $ourMatchers) {
+            $ourCmds = Get-MatcherCommands $om
+            $hasNew = $false
+            foreach ($oc in $ourCmds) {
+                if (-not $existingCmds.ContainsKey($oc)) {
+                    $hasNew = $true
+                    break
+                }
+            }
+            if ($hasNew) {
+                $userMatcherList = @($userMatcherList) + @($om)
+                foreach ($oc in $ourCmds) {
+                    $existingCmds[$oc] = $true
+                }
+            }
+        }
+        $result[$evt] = $userMatcherList
+    }
+    return $result
+}
+
+# 合并 permissions：allow/deny 数组并集去重，defaultMode 用户优先
+function Merge-Permissions {
+    param(
+        [hashtable]$Ours,
+        [hashtable]$Theirs
+    )
+    $result = @{}
+
+    # allow: 并集去重
+    $allowSet = [System.Collections.Generic.HashSet[string]]::new()
+    if ($Theirs.ContainsKey('allow')) {
+        foreach ($a in $Theirs['allow']) { $allowSet.Add($a) | Out-Null }
+    }
+    if ($Ours.ContainsKey('allow')) {
+        foreach ($a in $Ours['allow']) { $allowSet.Add($a) | Out-Null }
+    }
+    $result['allow'] = @($allowSet)
+
+    # deny: 并集去重
+    $denySet = [System.Collections.Generic.HashSet[string]]::new()
+    if ($Theirs.ContainsKey('deny')) {
+        foreach ($d in $Theirs['deny']) { $denySet.Add($d) | Out-Null }
+    }
+    if ($Ours.ContainsKey('deny')) {
+        foreach ($d in $Ours['deny']) { $denySet.Add($d) | Out-Null }
+    }
+    $result['deny'] = @($denySet)
+
+    # defaultMode: 用户优先
+    if ($Theirs.ContainsKey('defaultMode')) {
+        $result['defaultMode'] = $Theirs['defaultMode']
+    } elseif ($Ours.ContainsKey('defaultMode')) {
+        $result['defaultMode'] = $Ours['defaultMode']
+    }
+
+    # skipDangerousModePermissionPrompt: 用户优先
+    if ($Theirs.ContainsKey('skipDangerousModePermissionPrompt')) {
+        $result['skipDangerousModePermissionPrompt'] = $Theirs['skipDangerousModePermissionPrompt']
+    } elseif ($Ours.ContainsKey('skipDangerousModePermissionPrompt')) {
+        $result['skipDangerousModePermissionPrompt'] = $Ours['skipDangerousModePermissionPrompt']
+    }
+
+    # 保留用户的其他 permissions 字段
+    foreach ($key in $Theirs.Keys) {
+        if (-not $result.ContainsKey($key)) {
+            $result[$key] = $Theirs[$key]
+        }
+    }
+
+    return $result
+}
+
+# ============================================================
+#  settings.json 写入策略选择（检测到已有配置时交互）
+# ============================================================
+function Read-SettingsJsonStrategy {
+    $SETTINGS_PATH = Join-Path $CLAUDE_HOME 'settings.json'
+    if (-not (Test-Path $SETTINGS_PATH)) {
+        return 'fresh'   # 不存在，直接创建
+    }
+
+    Write-Host ''
+    Write-Host '  ┌─────────────────────────────────────────────────────────┐' -ForegroundColor Yellow
+    Write-Host '  │  检测到现有的 ~/.claude/settings.json                    │' -ForegroundColor Yellow
+    Write-Host '  │  选择处理策略：                                         │' -ForegroundColor Yellow
+    Write-Host '  │                                                         │' -ForegroundColor Yellow
+    Write-Host '  │  1. 覆盖  备份后整体替换（最简单，但丢失用户 env/MCP 等）│' -ForegroundColor Yellow
+    Write-Host '  │  2. 合并  保留用户 env/permissions，添加 hooks/statusLine│' -ForegroundColor Green
+    Write-Host '  │  3. 跳过  仅部署 hooks 文件，不动 settings.json         │' -ForegroundColor Cyan
+    Write-Host '  │  4. 取消  保留所有现有配置，退出安装                     │' -ForegroundColor Red
+    Write-Host '  └─────────────────────────────────────────────────────────┘' -ForegroundColor Yellow
+    Write-Host ''
+
+    $choice = Read-Host '  请选择 [1/2/3/4]（默认 2: 合并）'
+
+    switch ($choice) {
+        '1' { return 'overwrite' }
+        '2' { return 'merge' }
+        '3' { return 'skip' }
+        '4' { return 'cancel' }
+        default { return 'merge' }
+    }
+}
+
+# ============================================================
 #  阶段 3.5：写入 ~/.claude/settings.json（合并 GeneralConfiguration）
 # ============================================================
 function Install-SettingsJson {
-    Write-Step '生成 ~/.claude/settings.json（启用 hooks）'
+    param(
+        [ValidateSet('fresh', 'overwrite', 'merge', 'skip')]
+        [string]$Strategy = 'fresh'
+    )
 
     $SETTINGS_PATH = Join-Path $CLAUDE_HOME 'settings.json'
+
+    # 跳过策略：仅报告，不写入
+    if ($Strategy -eq 'skip') {
+        Write-Step 'settings.json：已跳过（用户选择）'
+        Write-Info '  hooks 文件已部署，但 settings.json 未更新'
+        Write-Info '  需手动合并或通过 cc-switch 启用 hooks'
+        return
+    }
 
     # 基础配置：插件 + 状态行 + hooks + 权限
     $settings = [ordered]@{
@@ -1089,12 +1317,91 @@ function Install-SettingsJson {
         }
     }
 
+    # 根据策略决定写入方式
+    $stepLabel = switch ($Strategy) {
+        'fresh'     { '生成 ~/.claude/settings.json（启用 hooks）' }
+        'overwrite' { '覆盖 ~/.claude/settings.json（备份已完成）' }
+        'merge'     { '合并 ~/.claude/settings.json（保留用户配置 + 添加 hooks）' }
+    }
+    Write-Step $stepLabel
+
+    if ($Strategy -eq 'merge') {
+        $existing = @{}
+        if (Test-Path $SETTINGS_PATH) {
+            try {
+                $raw = Get-Content -Raw $SETTINGS_PATH -Encoding UTF8
+                if (-not [string]::IsNullOrWhiteSpace($raw)) {
+                    $parsed = $raw | ConvertFrom-Json -AsHashtable
+                    if ($null -ne $parsed) { $existing = $parsed }
+                }
+            } catch {
+                Write-Warn2 "  现有 settings.json 解析失败，将整体覆盖：$_"
+            }
+        }
+
+        # ── 深度合并各字段 ──
+
+        # 1. enabledPlugins: 双方合并，用户的开关优先
+        if ($settings.Keys -contains 'enabledPlugins' -and $existing.ContainsKey('enabledPlugins')) {
+            foreach ($pk in $settings['enabledPlugins'].Keys) {
+                if (-not $existing['enabledPlugins'].ContainsKey($pk)) {
+                    $existing['enabledPlugins'][$pk] = $settings['enabledPlugins'][$pk]
+                }
+            }
+            $settings['enabledPlugins'] = $existing['enabledPlugins']
+        }
+
+        # 2. env: 用户优先（保护 API key / base URL），缺失 key 用我们补
+        if ($existing.ContainsKey('env') -and $settings.Keys -contains 'env') {
+            foreach ($ek in $settings['env'].Keys) {
+                if (-not $existing['env'].ContainsKey($ek)) {
+                    $existing['env'][$ek] = $settings['env'][$ek]
+                }
+            }
+            $settings['env'] = $existing['env']
+        }
+
+        # 3. hooks: 按事件合并，每个事件内的 hooks 列表追加我们的（按 command 去重）
+        if ($settings.Keys -contains 'hooks' -and $existing.ContainsKey('hooks')) {
+            $settings['hooks'] = Merge-Hooks -Ours $settings['hooks'] -Theirs $existing['hooks']
+        }
+
+        # 4. permissions: allow/deny 数组并集去重，defaultMode 用户优先
+        if ($settings.Keys -contains 'permissions' -and $existing.ContainsKey('permissions')) {
+            $settings['permissions'] = Merge-Permissions -Ours $settings['permissions'] -Theirs $existing['permissions']
+        }
+
+        # 5. statusLine: 项目优先（统一 status_line_v6）
+        # （已在 $settings 中，无需额外处理）
+
+        # 6. autoConnectIde: 项目优先
+        # （已在 $settings 中，无需额外处理）
+
+        # 7. 保留用户的其他字段（如 ccmManaged, ccmProvider, $schema 等）
+        foreach ($key in $existing.Keys) {
+            if ($settings.Keys -notcontains $key) {
+                $settings[$key] = $existing[$key]
+            }
+        }
+        Write-Info '  深度合并：env 用户优先 / hooks 按事件追加去重 / permissions 并集 / 其他字段保留'
+    }
+
     try {
+        # 确保目录存在
+        $settingsDir = Split-Path $SETTINGS_PATH -Parent
+        if (-not (Test-Path $settingsDir)) { New-Item -ItemType Directory -Force -Path $settingsDir | Out-Null }
+
         $json = $settings | ConvertTo-Json -Depth 10
-        Set-Content -Path $SETTINGS_PATH -Value $json -Encoding UTF8
+        # 原子写：先 .tmp 再 Move-Item
+        $tmp = "$SETTINGS_PATH.tmp"
+        $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+        [System.IO.File]::WriteAllText($tmp, $json, $utf8NoBom)
+        Move-Item -Force $tmp $SETTINGS_PATH
         Write-Ok "  $SETTINGS_PATH"
-        Write-Info '  包含：enabledPlugins + env + statusLine + 7 个 hooks 事件 + permissions'
+        $label = if ($Strategy -eq 'merge') { '合并' } else { '写入' }
+        Write-Info "  已${label}：enabledPlugins + env + statusLine + 7 个 hooks 事件 + permissions"
     } catch {
+        if (Test-Path "$SETTINGS_PATH.tmp") { Remove-Item "$SETTINGS_PATH.tmp" -Force -ErrorAction SilentlyContinue }
         Write-Err "  settings.json 写入失败：$_"
     }
 }
@@ -1211,7 +1518,12 @@ function Show-Summary {
         Write-Host '  已部署文件：' -ForegroundColor White
         Write-Info "    hooks 目录：$hookCount 个 .py（含 4 个用户自写）"
         Write-Info "    status_line 目录：$slCount 个 .py"
-        Write-Info "    settings.json：$(if ($settingsExists) { '已生成 ✓' } else { '未生成 ✗' })"
+        Write-Info "    settings.json：$(if ($settingsExists) { '已生成 ✓' } else { '未生成（跳过）' })"
+        if ($settingsExists -and $settingsStrategy -eq 'merge') {
+            Write-Info '      策略：合并（保留用户 env + 项目 hooks）'
+        } elseif ($settingsExists -and $settingsStrategy -eq 'overwrite') {
+            Write-Info '      策略：覆盖（备份在 ~/.claude/backups/）'
+        }
         Write-Info "    ~/.claude.json: hasCompletedOnboarding = $(if ($onboardingDone) { 'true ✓' } else { 'false ✗' })"
     } else {
         Write-Info ''
@@ -1258,14 +1570,30 @@ try {
     Write-Host "  安装模式：$InstallMode" -ForegroundColor $(if ($InstallMode -eq 'Full') { 'Yellow' } else { 'Green' })
 
     Test-Prerequisites
+
+    # 检测现有配置（报告给用户，返回是否有冲突）
+    $hasExisting = Test-ExistingConfig
+
     if (-not $SkipClaudeInstall) { Install-ClaudeCode }
     else { Write-Step 'Claude Code 安装：已跳过（-SkipClaudeInstall）' }
 
     if ($InstallMode -eq 'Full') {
+        # 写入 settings.json 前自动备份
+        Backup-SettingsJson
+
+        # 检测策略（已有配置时交互选择，全新环境直接创建）
+        $settingsStrategy = Read-SettingsJsonStrategy
+        if ($settingsStrategy -eq 'cancel') {
+            Write-Host ''
+            Write-Host '  [CANCEL] 用户取消安装，所有现有配置保持不变' -ForegroundColor Yellow
+            Write-Host ''
+            exit 0
+        }
+
         Install-UserHooks
         Install-Hooks
         Install-ClaudeJson
-        Install-SettingsJson
+        Install-SettingsJson -Strategy $settingsStrategy
     } else {
         Write-Step 'hooks 部署：已跳过（Minimal 模式）'
         Write-Info '  如需后续安装 hooks，可重新运行并选择 Full 模式：'

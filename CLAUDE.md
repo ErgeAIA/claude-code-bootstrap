@@ -37,18 +37,23 @@ claude-code-bootstrap/
    - 可通过 `-InstallMode Minimal|Full` 参数跳过交互
    - `-SkipClaudeInstall` 仅部署 hooks（配合 Full 模式补装）
 2. **前置检测**：PowerShell 5.1+、64 位系统、Git、UV（自动安装）、Node.js
-3. **Claude Code 安装**（三级兜底）：
+3. **现有配置检测**：`Test-ExistingConfig` 报告 settings.json / .claude.json / hooks / status_lines 是否已存在
+4. **Claude Code 安装**（三级兜底）：
    - native（GCS 直连）→ winget → npm
    - native 安装默认 60 秒超时自动降级
    - SHA256 校验 + 文件大小双重验证
-4. **PATH 维护**：三种安装路径都处理（`~/.local/bin`、winget 目录、npm 全局目录）
-5. **Hooks 部署**（仅 Full 模式）：
+5. **PATH 维护**：三种安装路径都处理（`~/.local/bin`、winget 目录、npm 全局目录）
+6. **自动备份**（仅 Full 模式）：`Backup-SettingsJson` 在写入 settings.json 前备份到 `~/.claude/backups/settings.json.<timestamp>.bak`，保留最近 10 个
+7. **Hooks 部署**（仅 Full 模式）：
    - **用户自写 hooks**（4 个）从 `setup-claude.ps1` 的 `$USER_HOOKS_CONTENT` 嵌入内容写入，离线可用
    - **disler 仓库 hooks**（6 个）+ status_line_v6 联网下载，Gitee + GitHub 双源，国内优先 Gitee
    - 下载/写入后 SHA256 校验，不匹配则删除文件并报错
    - 校验和维护在 `checksums.txt` 和 `$CHECKSUMS` 哈希表中
-6. **settings.json 生成**（仅 Full 模式）：合并 `GeneralConfiguration.json` 写入 `~/.claude/settings.json`，启用所有 hooks + 权限 + 状态行，立即生效
-7. **onboarding 预填**（仅 Full 模式）：在 `~/.claude.json` 中合并写入 `hasCompletedOnboarding: true`，跳过主题/欢迎向导。原子写（.tmp + Move-Item），保留 installMethod / autoUpdates / projects 等其他字段。`hasTrustDialogAccepted` 和 `hasCompletedProjectOnboarding` 不处理（前者涉及 CVE-2026-33068 类工作区信任风险，后者反幂等）
+8. **settings.json 生成**（仅 Full 模式）：合并 `GeneralConfiguration.json` 写入 `~/.claude/settings.json`，启用所有 hooks + 权限 + 状态行，立即生效
+   - 已有 settings.json 时交互选择策略：覆盖 / 合并 / 跳过 / 取消
+   - 合并策略：`env` 用户优先（保护 API key） / `hooks`+`permissions`+`statusLine` 项目优先 / 其他字段保留
+   - 原子写（.tmp + Move-Item + UTF-8 无 BOM）
+9. **onboarding 预填**（仅 Full 模式）：在 `~/.claude.json` 中合并写入 `hasCompletedOnboarding: true`，跳过主题/欢迎向导。原子写（.tmp + Move-Item），保留 installMethod / autoUpdates / projects 等其他字段。`hasTrustDialogAccepted` 和 `hasCompletedProjectOnboarding` 不处理（前者涉及 CVE-2026-33068 类工作区信任风险，后者反幂等）
 
 ### 入口流程（install.ps1）
 
@@ -102,7 +107,8 @@ claude-code-bootstrap/
 
 ## 注意事项
 
-- 本项目不写 `settings.json`，该部分由 cc-switch 的"通用配置片段"管理，避免冲突
+- 本项目**会**在 Full 模式下自动生成 `~/.claude/settings.json`，已有配置时交互选择策略（覆盖/合并/跳过/取消）
+- 合并策略：`env` 用户优先 / `hooks`+`permissions`+`statusLine` 项目优先 / 其他字段保留
 - `~/.claude.json`（状态文件）在 Full 模式下仅预填 `hasCompletedOnboarding`，其他字段（installMethod / autoUpdates / projects）由 Claude Code 自己管理
 - native 安装的二进制存放在 `~/.local/share/claude/versions/`，符号链接到 `~/.local/bin/claude.exe`
 - `.claude.json` 标记安装方式（`installMethod: native/winget/npm`）

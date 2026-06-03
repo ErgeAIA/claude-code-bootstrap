@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-03
+
+### Added
+- New `Test-ExistingConfig` function: scans settings.json / .claude.json / hooks / status_lines and reports existing config
+- New `Backup-SettingsJson` function: auto-backup to `~/.claude/backups/settings.json.<timestamp>.bak` before writing, keeps last 10
+- New `Read-SettingsJsonStrategy` function: interactive strategy selection when settings.json exists (overwrite / merge / skip / cancel)
+- New `Merge-Hooks` function: per-event hooks merge, user hooks preserved + project hooks appended (dedup by command)
+- New `Merge-Permissions` function: allow/deny array union dedup, defaultMode user-priority
+- `Install-SettingsJson` now accepts `-Strategy` param (fresh / overwrite / merge / skip), merge strategy implements deep merge:
+  - `env`: user-priority (protects API key / base URL), missing keys filled from project
+  - `enabledPlugins`: both sides merged, user switches take priority
+  - `hooks`: per-event append with dedup (user preserved + project appended)
+  - `permissions`: allow/deny union dedup, defaultMode user-priority
+  - `statusLine`: project-priority (standardized status_line_v6)
+  - Other fields (ccmManaged / ccmProvider etc.): user-priority preserved
+- settings.json write changed to atomic (.tmp + Move-Item + UTF-8 no-BOM), consistent with .claude.json
+- `Show-Summary` now displays strategy type (merge / overwrite / skip)
+- README updated "cc-switch integration" and "existing config protection" sections
+- CLAUDE.md updated installation flow steps 6-8 and notes
+
+### Changed
+- Full mode main flow: `Backup-SettingsJson` → `Read-SettingsJsonStrategy` → cancel exits 0 → `Install-SettingsJson -Strategy`
+- Ensure `~/.claude/` directory exists before writing settings.json (fix WriteAllText path-not-found on fresh install)
+
 ## [1.3.0] - 2026-06-03
 
 ### Added

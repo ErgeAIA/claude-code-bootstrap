@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-03
+
+### Added
+- 新增 `Test-ExistingConfig` 函数：扫描 settings.json / .claude.json / hooks / status_lines，报告已有配置
+- 新增 `Backup-SettingsJson` 函数：写入前自动备份到 `~/.claude/backups/settings.json.<timestamp>.bak`，保留最近 10 个
+- 新增 `Read-SettingsJsonStrategy` 函数：检测到 settings.json 已存在时交互选择策略（覆盖 / 合并 / 跳过 / 取消）
+- 新增 `Merge-Hooks` 函数：按事件合并 hooks，每个事件内用户 hooks 保留 + 项目 hooks 追加（按 command 去重）
+- 新增 `Merge-Permissions` 函数：allow/deny 数组并集去重，defaultMode 用户优先
+- `Install-SettingsJson` 支持 `-Strategy` 参数（fresh / overwrite / merge / skip），merge 策略实现深度合并：
+  - `env`：用户优先（保护 API key / base URL），缺失 key 用项目补
+  - `enabledPlugins`：双方合并，用户开关优先
+  - `hooks`：按事件追加去重（用户保留 + 项目追加）
+  - `permissions`：allow/deny 并集去重，defaultMode 用户优先
+  - `statusLine`：项目优先（统一 status_line_v6）
+  - 其他字段（ccmManaged / ccmProvider 等）：用户优先保留
+- settings.json 写入改为原子写（.tmp + Move-Item + UTF-8 无 BOM），与 .claude.json 一致
+- `Show-Summary` 显示策略类型（合并 / 覆盖 / 跳过）
+- README 更新"与 cc-switch 配合"和"已有配置保护"章节
+- CLAUDE.md 更新安装流程步骤 6-8 和注意事项
+
+### Changed
+- Full 模式主流程：`Backup-SettingsJson` → `Read-SettingsJsonStrategy` → 取消则 exit 0 → `Install-SettingsJson -Strategy`
+- settings.json 写入前确保 `~/.claude/` 目录存在（修复全新环境 WriteAllText 路径不存在问题）
+
 ## [1.3.0] - 2026-06-03
 
 ### Added

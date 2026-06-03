@@ -164,9 +164,21 @@ flowchart TD
 
 ### 与 cc-switch 配合
 
-本项目不写 `settings.json`，因为这部分由 [cc-switch](https://github.com/farion1231/cc-switch) 的"通用配置片段"统一管理，避免冲突。
+本项目**会**在 Full 模式下自动生成 `~/.claude/settings.json`（写入前自动备份到 `~/.claude/backups/`）。如果你同时使用 [cc-switch](https://github.com/farion1231/cc-switch) 管理供应商切换：
 
-部署完成后，在 cc-switch 里粘贴通用配置（hooks、permissions、statusLine 等），切换供应商即可生效。
+- cc-switch 切换供应商时会**整体覆盖** settings.json（它自己也会备份）
+- 我们的脚本写入后，cc-switch 下次切换会重建配置，hooks 不会丢失（通用配置片段存在 cc-switch 数据库中）
+- **建议顺序**：先跑本脚本部署 hooks → 再用 cc-switch 切换供应商
+
+### 已有配置保护
+
+脚本在 Full 模式写入前会自动执行：
+
+1. **检测报告**：扫描 `~/.claude/settings.json`、`~/.claude.json`、hooks、status_lines 是否已存在
+2. **自动备份**：`~/.claude/settings.json` → `~/.claude/backups/settings.json.<timestamp>.bak`（保留最近 10 个）
+3. **交互选择**：检测到 settings.json 已存在时，提供覆盖 / 合并 / 跳过三种策略
+
+> 💡 如果你是从零部署（无既有配置），脚本会直接创建，无需任何选择。
 
 ### Onboarding 跳过（Full 模式默认行为）
 
