@@ -44,7 +44,7 @@ iwr https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1 | iex
 1. 测速选择最快镜像源
 2. 下载主脚本 `setup-claude.ps1`
 3. **选择安装模式**（默认仅安装软件，可选完整安装含 hooks）
-4. 检测 PowerShell、Git、UV、Node.js（缺啥补啥）
+4. 检测 PowerShell、Git、UV（缺啥补啥）
 5. 三级兜底安装 Claude Code（native → winget → npm）
 6. 自动配置 PATH（立即生效）
 7. 完整模式下：
@@ -90,7 +90,7 @@ flowchart TD
 | 🔁 **下载重试**       | 网络抖动自动重试 3 次                      |
 | 🛣️ **PATH 自动维护**  | native / winget / npm 三种位置都处理       |
 | 🪝 **hooks 可选部署** | 交互选择是否安装，默认不部署，尊重安全考量 |
-| 📋 **依赖自检**       | PowerShell、Git、UV、Node.js 缺啥补啥      |
+| 📋 **依赖自检**       | PowerShell、Git、UV 缺啥补啥              |
 | 🔒 **hooks 安全校验** | SHA256 校验防篡改，校验失败自动删除        |
 | 🌐 **hooks 双源下载** | Gitee + GitHub 双源，国内优先 Gitee        |
 
@@ -238,7 +238,7 @@ flowchart TD
 
 - **Git**：hooks 中部分脚本需要
 - **UV**：hooks 全部用 `uv run --script` 执行
-- **Node.js**：仅 npm 兜底安装时需要
+- **Node.js**：可选但推荐（npm 兜底安装时自动安装；native/winget 不需要）
 
 ## 🗂️ 项目结构
 

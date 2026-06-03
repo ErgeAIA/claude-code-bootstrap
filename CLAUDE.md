@@ -38,7 +38,7 @@ claude-code-bootstrap/
 1. **安装模式选择**：交互式选择 Minimal（仅软件，默认）或 Full（软件 + hooks）
    - 可通过 `-InstallMode Minimal|Full` 参数跳过交互
    - `-SkipClaudeInstall` 仅部署 hooks（配合 Full 模式补装）
-2. **前置检测**：PowerShell 5.1+、64 位系统、Git、UV（自动安装）、Node.js
+2. **前置检测**：PowerShell 5.1+、64 位系统、Git、UV（自动安装）；Node.js 仅 npm 兜底时自动安装
 3. **现有配置检测**：`Test-ExistingConfig` 报告 settings.json / .claude.json / hooks / status_lines 是否已存在
 4. **Claude Code 安装**（三级兜底）：
    - native（GCS 直连）→ winget → npm

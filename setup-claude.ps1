@@ -2,7 +2,8 @@
 .SYNOPSIS
     Claude Code 一键部署脚本（环境检测 + 安装 + hooks 部署）
 .DESCRIPTION
-    1. 前置环境检测：PowerShell、64 位、Git、UV（自动安装）、Node.js
+    1. 前置环境检测：PowerShell、64 位、Git、UV（自动安装）
+       Node.js 仅 npm 兜底时自动安装，native/winget 不需要
     2. Claude Code 安装：native (GCS) → winget → npm 三级兜底
     3. 可选：下载 disler 仓库的 6 个 hooks + status_line_v6
     4. 检查用户自写 hooks 就位情况
@@ -943,10 +944,33 @@ function Install-Winget {
 }
 
 function Install-Npm {
-    Write-Info '方式 3/3：npm 全局（官方已不推荐，仅作兜底）'
+    Write-Info '方式 3/3：npm 全局（仅作兜底）'
+
+    # npm 不可用时，尝试用 winget 自动安装 Node.js LTS
     if (-not (Has-Command 'npm')) {
-        throw 'npm 未安装。请先安装 Node.js: winget install OpenJS.NodeJS.LTS'
+        Write-Info 'npm 不可用，尝试自动安装 Node.js LTS...'
+        if (Has-Command 'winget') {
+            & winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+            if ($LASTEXITCODE -ne 0) { throw "winget 安装 Node.js 失败，退出码 $LASTEXITCODE" }
+            # 刷新当前会话 PATH（winget 安装的 Node.js 通常写入 Program Files）
+            $nodePaths = @(
+                "${env:ProgramFiles}\nodejs",
+                "${env:ProgramFiles(x86)}\nodejs"
+            )
+            foreach ($p in $nodePaths) {
+                if ((Test-Path $p) -and $env:Path -notlike "*$p*") {
+                    $env:Path = "$p;$env:Path"
+                }
+            }
+            if (-not (Has-Command 'npm')) {
+                throw 'Node.js 已安装但 npm 仍不可用，请重启终端后重试'
+            }
+            Write-Ok 'Node.js LTS 自动安装成功'
+        } else {
+            throw 'npm 和 winget 均不可用，无法自动安装 Node.js。请手动安装 Node.js LTS 后重试'
+        }
     }
+
     & npm install -g @anthropic-ai/claude-code
     if ($LASTEXITCODE -ne 0) { throw "npm 退出码 $LASTEXITCODE" }
     Write-Ok 'npm 安装成功'
