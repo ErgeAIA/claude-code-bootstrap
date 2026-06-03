@@ -31,6 +31,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full mode main flow: `Backup-SettingsJson` → `Read-SettingsJsonStrategy` → cancel exits 0 → `Install-SettingsJson -Strategy`
 - Ensure `~/.claude/` directory exists before writing settings.json (fix WriteAllText path-not-found on fresh install)
 
+### Documentation
+- README.md fixed strategy options count: 3 -> 4 (add `4. Cancel` as fourth option)
+- README.md added deep merge semantics table (10 fields) for `Install-SettingsJson -Strategy merge`
+- README.md `~/.claude/` deployment tree: add `backups/` directory
+- README.md project structure: add `CHANGELOG.en.md` / `CLAUDE.md` / `LICENSE` / `logs/`
+- README.md added atomic write description (.tmp + Move-Item + UTF-8 no-BOM)
+- CLAUDE.md added step 7 (strategy selection `Read-SettingsJsonStrategy`)
+- CLAUDE.md step 9 added detailed deep merge semantics
+- CLAUDE.md step 8 added hooks "Test-Path skip" note
+- CLAUDE.md project structure: add missing `LICENSE` entry
+- CLAUDE.md notes: detailed merge semantics, add `~/.claude/backups/` maintenance note
+- Related commit: `9fe4bca` (docs: align README.md and CLAUDE.md with v1.4.0 config protection)
+
 ## [1.3.0] - 2026-06-03
 
 ### Added
@@ -44,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hasTrustDialogAccepted` (workspace trust gate) is **not** prefilled — that flag would bypass the trust dialog for every project, exposing users to CVE-2026-33068-class risk; keep the default behavior (prompt the user) is safer
 - `hasCompletedProjectOnboarding` is **not** prefilled — requires absolute project paths, anti-idempotent, low user-friendliness
 - `.claude.json` writes use UTF-8 no-BOM + atomic replace, so a crash never leaves a half-written file
+
+### Documentation
+- README.md added "Onboarding skip (Full mode default)" section, explaining only `hasCompletedOnboarding` is prefilled and why `hasTrustDialogAccepted` / `hasCompletedProjectOnboarding` are NOT touched (CVE-2026-33068 risk + anti-idempotent)
+- CLAUDE.md installation flow added step 7 "onboarding prefill" note
+- Related commit: `042f49e` (feat: skip global onboarding wizard in Full mode (v1.3.0))
 
 ## [1.2.0] - 2026-06-03
 
@@ -68,6 +86,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - User hooks embedded content + SHA256 verification; tampering is detected and rejected
 - settings.json written via `[ordered]@{}` to ensure field order matches `GeneralConfiguration.json`
+
+### Documentation
+- README added execution flow chart (Mermaid format), showing mirror source selection -> install mode branching -> Full mode hooks deployment flow
+- README added comprehensive `GeneralConfiguration.json` field reference table (7 top-level fields + 5 allow categories + 6 deny rules)
+- README added "Install Mode" section explaining 1/2 options and parameter usage
+- README removed redundant "License" section
+- README updated project structure comments to mark user hooks' dual identity (source file + embedded content)
+- Related commit: `6f1e329` (docs: update CLAUDE.md and README.md with v1.1.0 changes, README project structure note adjustment, CHANGELOG archive v1.2.0)
 
 ## [1.1.0] - 2026-06-03
 

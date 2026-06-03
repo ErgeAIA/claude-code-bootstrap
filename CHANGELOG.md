@@ -31,6 +31,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full 模式主流程：`Backup-SettingsJson` → `Read-SettingsJsonStrategy` → 取消则 exit 0 → `Install-SettingsJson -Strategy`
 - settings.json 写入前确保 `~/.claude/` 目录存在（修复全新环境 WriteAllText 路径不存在问题）
 
+### Documentation
+- README.md 修正策略选项 3 → 4（补 `4. 取消`），加深度合并语义表（10 个字段）
+- README.md `~/.claude/` 部署结构加 `backups/` 目录
+- README.md 项目结构加 `CHANGELOG.en.md` / `CLAUDE.md` / `LICENSE` / `logs/`
+- README.md 加原子写说明（.tmp + Move-Item + UTF-8 无 BOM）
+- CLAUDE.md 加步骤 7（策略选择 `Read-SettingsJsonStrategy`）
+- CLAUDE.md 步骤 9 加深度合并详细语义
+- CLAUDE.md 步骤 8 加 hooks "Test-Path 跳过" 说明
+- CLAUDE.md 仓库结构加 `LICENSE` 缺失项
+- CLAUDE.md 注意事项加深合字段细节 + `~/.claude/backups/` 维护说明
+- 关联 commit：`9fe4bca` (docs: align README.md and CLAUDE.md with v1.4.0 config protection)
+
 ## [1.3.0] - 2026-06-03
 
 ### Added
@@ -44,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hasTrustDialogAccepted`（工作区信任大门）**不**被预填 — 该标记会绕过所有项目的信任对话框，关联 CVE-2026-33068 类风险，保持默认弹出让用户决策更安全
 - `hasCompletedProjectOnboarding` **不**被预填 — 需按项目绝对路径写入，反幂等、用户友好度低
 - `.claude.json` 写入采用 UTF-8 无 BOM + 原子替换，崩溃不会留半截文件
+
+### Documentation
+- README.md 加 "Onboarding 跳过（Full 模式默认行为）" 小节，说明仅 `hasCompletedOnboarding` 被预填、`hasTrustDialogAccepted` / `hasCompletedProjectOnboarding` 不处理的原因（CVE-2026-33068 风险 + 反幂等）
+- CLAUDE.md 安装流程新增第 7 步 "onboarding 预填" 说明
+- 关联 commit：`042f49e` (feat: skip global onboarding wizard in Full mode (v1.3.0))
 
 ## [1.2.0] - 2026-06-03
 
@@ -68,6 +85,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - 用户 hooks 嵌入内容 + SHA256 校验，篡改会被检测并拒绝写入
 - settings.json 写入使用 `[ordered]@{}` 确保字段顺序与 `GeneralConfiguration.json` 一致
+
+### Documentation
+- README 新增执行流程图（Mermaid 格式），展示镜像源选择 → 安装模式分支 → Full 模式 hooks 部署流程
+- README 新增 `GeneralConfiguration.json` 完整字段说明表（7 个顶层字段 + 5 类白名单 + 6 条黑名单）
+- README 新增"安装模式"章节，说明 1/2 选项及参数用法
+- README 删除冗余的"协议说明"部分
+- README 调整仓库结构注释，标注用户 hooks 的双重身份（源文件 + 嵌入内容）
+- 关联 commit：`6f1e329` (docs: update CLAUDE.md and README.md with v1.1.0 changes, README 项目结构注释调整、CHANGELOG 归档 v1.2.0)
 
 ## [1.1.0] - 2026-06-03
 
