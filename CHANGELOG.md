@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **scripts/refresh-user-hook-hash.ps1**: 用户自写 hooks 哈希刷新工具，解决 GBK 编码导致的 SHA256 计算错误
-- **CLAUDE.md**: 新增"完整提交流程"工作流约定
+- **CLAUDE.md**: 新增"完整提交流程"工作流约定（5 步：CHANGELOG → README → 复审 → commit → 双平台推送）
 
 ### Changed
 - **hooks/verify_on_stop.py**: 

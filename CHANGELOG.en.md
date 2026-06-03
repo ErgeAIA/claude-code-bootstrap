@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **scripts/refresh-user-hook-hash.ps1**: User-written hooks hash refresh utility, fixing SHA256 calculation errors caused by GBK encoding
-- **CLAUDE.md**: New "Complete Commit Workflow" convention section
+- **CLAUDE.md**: New "Complete Commit Workflow" convention section (5 steps: CHANGELOG → README → review → commit → dual-platform push)
 
 ### Changed
 - **hooks/verify_on_stop.py**: 

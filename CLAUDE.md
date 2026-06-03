@@ -133,19 +133,27 @@ claude-code-bootstrap/
    - 在 `CHANGELOG.md` 和 `CHANGELOG.en.md` 的 `[Unreleased]` 段追加条目
    - 按类别归入 `Added` / `Changed` / `Fixed` / `Security` / `Performance` / `Documentation`
    - 涉及安全修复必须有 `Security` 段；涉及性能优化必须有 `Performance` 段
-2. **运行复审检查**
+2. **同步 README**（如有可见变化）
+   - 新增功能：在"功能特性"表格加一行，必要时在"包含内容"补 hook 列表
+   - 移除/废弃功能：从表格和说明中删除对应条目
+   - 架构调整（目录结构、新增 scripts、新增 GitHub Actions 等）：更新"项目结构"代码块
+   - 安装流程/参数变化：更新"快速开始"步骤、"高级用法"参数说明
+   - 系统要求变化（硬/软依赖增减）：更新"系统要求"段
+   - 纯内部重构（不影响用户）：可跳过 README
+3. **运行复审检查**
    - PowerShell 脚本：用 `Parser::ParseFile` 做语法检查，确保 0 errors
    - 嵌入 hooks 哈希：用 `refresh-user-hook-hash.ps1` 验证嵌入内容与源文件一致
    - 乱码检查：用 `Select-String` 搜索典型乱码字符（`閸` `鐎` 等）
-3. **生成 commit 信息**
+4. **生成 commit 信息**
    - 格式：`type(scope): subject`（conventional commit）
    - 关联版本号（如 v1.5.0），参考 CLAUDE.md 顶部历史记录
-4. **双平台推送**
+5. **双平台推送**
    - `git push origin <branch> && git push gitee <branch>`
    - 推送失败时**禁止**跳过，必须解决网络或权限问题后再推
 
 **反例**：
 - 改完代码直接 commit，没更新 CHANGELOG
+- 改了安装流程但没同步 README 的"快速开始"和"高级用法"
 - 推送了 GitHub 忘了 Gitee（违反双平台同步约定）
 - 嵌入 hooks 改了但没跑 `refresh-user-hook-hash.ps1`，部署时 SHA256 校验失败
 
