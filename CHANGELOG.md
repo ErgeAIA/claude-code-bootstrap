@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-03
+
+### Added
+- 新增 `-InstallMode` 参数（`Minimal`/`Full`），支持交互式选择安装模式，默认 `Minimal`（仅安装软件）
+- 4 个用户自写 hooks 嵌入到 `setup-claude.ps1` 的 `$USER_HOOKS_CONTENT` 中，Full 模式自动写入 `~/.claude/hooks/`，**无需用户手动放置**
+- 新增 `Install-UserHooks` 函数：从嵌入内容写入用户 hooks，UTF-8 无 BOM 跨 PS 5.1/7+ 一致
+- 新增 `Install-SettingsJson` 函数：合并 `GeneralConfiguration.json` 写入 `~/.claude/settings.json`，Full 模式安装后**立即启用所有 hooks**
+- 嵌入内容 SHA256 校验加入 `$CHECKSUMS` 哈希表（auto_format / block_dangerous / check_secrets / verify_on_stop）
+- README 新增执行流程图（Mermaid 格式）
+- README 新增 `GeneralConfiguration.json` 完整字段说明表（7 个顶层字段 + 5 类白名单 + 6 条黑名单）
+- README 新增"安装模式"章节，说明 1/2 选项及参数用法
+
+### Changed
+- `setup-claude.ps1` 主流程根据 `InstallMode` 决定是否执行 hooks 部署和 settings.json 生成
+- 用户 hooks 写入方式从 `Set-Content -Encoding UTF8` 改为 `[IO.File]::WriteAllText` + UTF-8 无 BOM，避免 BOM 影响 SHA256
+- `Install-Hooks` 函数移除"检查用户自写 hooks"逻辑（已被 `Install-UserHooks` 替代）
+- `Show-Summary` 函数根据安装模式显示不同内容，Full 模式额外展示 settings.json 状态
+- README 删除冗余的"协议说明"部分
+- README 调整仓库结构注释，标注用户 hooks 的双重身份（源文件 + 嵌入内容）
+
+### Security
+- 用户 hooks 嵌入内容 + SHA256 校验，篡改会被检测并拒绝写入
+- settings.json 写入使用 `[ordered]@{}` 确保字段顺序与 `GeneralConfiguration.json` 一致
+
 ## [1.1.0] - 2026-06-03
 
 ### Fixed

@@ -33,17 +33,22 @@ claude-code-bootstrap/
 
 ### 安装流程（setup-claude.ps1）
 
-1. **前置检测**：PowerShell 5.1+、64 位系统、Git、UV（自动安装）、Node.js
-2. **Claude Code 安装**（三级兜底）：
+1. **安装模式选择**：交互式选择 Minimal（仅软件，默认）或 Full（软件 + hooks）
+   - 可通过 `-InstallMode Minimal|Full` 参数跳过交互
+   - `-SkipClaudeInstall` 仅部署 hooks（配合 Full 模式补装）
+2. **前置检测**：PowerShell 5.1+、64 位系统、Git、UV（自动安装）、Node.js
+3. **Claude Code 安装**（三级兜底）：
    - native（GCS 直连）→ winget → npm
    - native 安装默认 60 秒超时自动降级
    - SHA256 校验 + 文件大小双重验证
-3. **PATH 维护**：三种安装路径都处理（`~/.local/bin`、winget 目录、npm 全局目录）
-4. **Hooks 部署**：从 disler/claude-code-hooks-mastery 下载 6 个 hooks + status_line_v6
-   - Gitee + GitHub 双源下载，国内优先 Gitee
-   - 下载后 SHA256 校验，不匹配则删除文件并报错
+4. **PATH 维护**：三种安装路径都处理（`~/.local/bin`、winget 目录、npm 全局目录）
+5. **Hooks 部署**（仅 Full 模式）：
+   - **用户自写 hooks**（4 个）从 `setup-claude.ps1` 的 `$USER_HOOKS_CONTENT` 嵌入内容写入，离线可用
+   - **disler 仓库 hooks**（6 个）+ status_line_v6 联网下载，Gitee + GitHub 双源，国内优先 Gitee
+   - 下载/写入后 SHA256 校验，不匹配则删除文件并报错
    - 校验和维护在 `checksums.txt` 和 `$CHECKSUMS` 哈希表中
-5. **用户 hooks 检查**：提示缺失的自写 hooks
+6. **settings.json 生成**（仅 Full 模式）：合并 `GeneralConfiguration.json` 写入 `~/.claude/settings.json`，启用所有 hooks + 权限 + 状态行，立即生效
+7. **用户 hooks 检查**（仅 Full 模式）：提示缺失的自写 hooks
 
 ### 入口流程（install.ps1）
 
@@ -72,11 +77,17 @@ claude-code-bootstrap/
 ### Hooks 规范
 - 所有 hooks 用 `uv run --script` 执行（零依赖管理）
 - disler 仓库的 hooks 通过脚本自动下载，**不提交到本仓库**
-- 用户自写的 hooks 放在 `hooks/` 目录，**提交到本仓库**
+- 用户自写的 hooks 放在 `hooks/` 目录，**源文件提交到本仓库 + 嵌入到 `setup-claude.ps1` 的 `$USER_HOOKS_CONTENT`**
+- 修改用户 hooks 后必须同时更新：
+  1. `hooks/<file>.py` 源文件
+  2. `setup-claude.ps1` 中的 `$USER_HOOKS_CONTENT` 嵌入块
+  3. `setup-claude.ps1` 中的 `$CHECKSUMS` 哈希值（用 `[IO.File]::WriteAllText` UTF-8 无 BOM 写入后计算）
+  4. `checksums.txt` 文件
 - 每个 hook 有独立超时设置（10-120 秒）
 - hooks 下载后必须通过 SHA256 校验，校验值维护在 `checksums.txt` 和 `$CHECKSUMS` 中
-- 上游 hooks 更新时，运行 `scripts/update-checksums.ps1` 刷新校验和
+- 上游 disler hooks 更新时，运行 `scripts/update-checksums.ps1` 刷新校验和
 - GitHub Actions 每周自动检测上游变更并创建 PR
+- **Full 模式自动生成 `~/.claude/settings.json`**，用户无需手动配置 cc-switch 即可启用 hooks
 
 ### 版本管理
 - 遵循 Semantic Versioning

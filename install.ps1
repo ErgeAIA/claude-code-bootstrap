@@ -7,6 +7,9 @@
 .NOTES
     用户只需要这一条命令：
     iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 | iex
+
+    指定安装模式：
+    iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 | iex -InstallMode Full
 #>
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8

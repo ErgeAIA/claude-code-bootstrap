@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-03
+
+### Added
+- New `-InstallMode` parameter (`Minimal`/`Full`) with interactive selection, default `Minimal` (software only)
+- Embed 4 user-written hooks into `setup-claude.ps1` via `$USER_HOOKS_CONTENT`, auto-written to `~/.claude/hooks/` in Full mode — **no manual placement required**
+- New `Install-UserHooks` function: writes user hooks from embedded content using UTF-8 no-BOM (consistent across PS 5.1/7+)
+- New `Install-SettingsJson` function: merges `GeneralConfiguration.json` and writes `~/.claude/settings.json`, **hooks take effect immediately** in Full mode
+- Embedded content SHA256 checksums added to `$CHECKSUMS` (auto_format / block_dangerous / check_secrets / verify_on_stop)
+- README: new execution flow chart (Mermaid format)
+- README: comprehensive `GeneralConfiguration.json` field reference table (7 top-level fields + 5 allow categories + 6 deny rules)
+- README: new "Install Mode" section explaining 1/2 options and parameter usage
+
+### Changed
+- `setup-claude.ps1` main flow now branches on `InstallMode` for hooks deployment and settings.json generation
+- User hooks write changed from `Set-Content -Encoding UTF8` to `[IO.File]::WriteAllText` + UTF-8 no-BOM to avoid BOM interference with SHA256
+- `Install-Hooks` function removed "check user-written hooks" logic (replaced by `Install-UserHooks`)
+- `Show-Summary` function displays different content per install mode, Full mode additionally shows settings.json status
+- README: removed redundant "License" section
+- README: updated project structure comments to mark user hooks' dual identity (source file + embedded content)
+
+### Security
+- User hooks embedded content + SHA256 verification; tampering is detected and rejected
+- settings.json written via `[ordered]@{}` to ensure field order matches `GeneralConfiguration.json`
+
 ## [1.1.0] - 2026-06-03
 
 ### Fixed
