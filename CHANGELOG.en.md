@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-03
+
+### Added
+- Full mode now automatically writes `hasCompletedOnboarding: true` into `~/.claude.json`, skipping the theme picker / welcome wizard on first launch
+- New `Install-ClaudeJson` function: read existing `.claude.json` → merge `hasCompletedOnboarding` → atomic write (.tmp + Move-Item) → preserves `installMethod` / `autoUpdates` / `projects` fields
+- `Show-Summary` in Full mode shows `~/.claude.json: hasCompletedOnboarding = true ✓` status line
+- README adds "Onboarding skip (Full mode default)" section, explaining only `hasCompletedOnboarding` is prefilled and why `hasTrustDialogAccepted` / `hasCompletedProjectOnboarding` are NOT touched
+- CLAUDE.md adds step 7 "onboarding prefill" to installation flow
+
+### Security
+- `hasTrustDialogAccepted` (workspace trust gate) is **not** prefilled — that flag would bypass the trust dialog for every project, exposing users to CVE-2026-33068-class risk; keep the default behavior (prompt the user) is safer
+- `hasCompletedProjectOnboarding` is **not** prefilled — requires absolute project paths, anti-idempotent, low user-friendliness
+- `.claude.json` writes use UTF-8 no-BOM + atomic replace, so a crash never leaves a half-written file
+
 ## [1.2.0] - 2026-06-03
 
 ### Added

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-03
+
+### Added
+- Full 模式自动在 `~/.claude.json` 中合并写入 `hasCompletedOnboarding: true`，首次启动不再弹主题选择 / 欢迎向导
+- 新增 `Install-ClaudeJson` 函数：读取现有 `.claude.json` → 合并 `hasCompletedOnboarding` → 原子写（.tmp + Move-Item）→ 保留 `installMethod` / `autoUpdates` / `projects` 等其他字段
+- `Show-Summary` 在 Full 模式新增 `~/.claude.json: hasCompletedOnboarding = true ✓` 状态行
+- README 新增 "Onboarding 跳过（Full 模式默认行为）" 小节，说明仅 `hasCompletedOnboarding` 被预填、`hasTrustDialogAccepted` / `hasCompletedProjectOnboarding` 不处理的原因
+- CLAUDE.md 安装流程新增第 7 步"onboarding 预填"说明
+
+### Security
+- `hasTrustDialogAccepted`（工作区信任大门）**不**被预填 — 该标记会绕过所有项目的信任对话框，关联 CVE-2026-33068 类风险，保持默认弹出让用户决策更安全
+- `hasCompletedProjectOnboarding` **不**被预填 — 需按项目绝对路径写入，反幂等、用户友好度低
+- `.claude.json` 写入采用 UTF-8 无 BOM + 原子替换，崩溃不会留半截文件
+
 ## [1.2.0] - 2026-06-03
 
 ### Added

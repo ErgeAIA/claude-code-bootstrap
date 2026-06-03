@@ -48,7 +48,7 @@ claude-code-bootstrap/
    - 下载/写入后 SHA256 校验，不匹配则删除文件并报错
    - 校验和维护在 `checksums.txt` 和 `$CHECKSUMS` 哈希表中
 6. **settings.json 生成**（仅 Full 模式）：合并 `GeneralConfiguration.json` 写入 `~/.claude/settings.json`，启用所有 hooks + 权限 + 状态行，立即生效
-7. **用户 hooks 检查**（仅 Full 模式）：提示缺失的自写 hooks
+7. **onboarding 预填**（仅 Full 模式）：在 `~/.claude.json` 中合并写入 `hasCompletedOnboarding: true`，跳过主题/欢迎向导。原子写（.tmp + Move-Item），保留 installMethod / autoUpdates / projects 等其他字段。`hasTrustDialogAccepted` 和 `hasCompletedProjectOnboarding` 不处理（前者涉及 CVE-2026-33068 类工作区信任风险，后者反幂等）
 
 ### 入口流程（install.ps1）
 
@@ -103,6 +103,7 @@ claude-code-bootstrap/
 ## 注意事项
 
 - 本项目不写 `settings.json`，该部分由 cc-switch 的"通用配置片段"管理，避免冲突
+- `~/.claude.json`（状态文件）在 Full 模式下仅预填 `hasCompletedOnboarding`，其他字段（installMethod / autoUpdates / projects）由 Claude Code 自己管理
 - native 安装的二进制存放在 `~/.local/share/claude/versions/`，符号链接到 `~/.local/bin/claude.exe`
 - `.claude.json` 标记安装方式（`installMethod: native/winget/npm`）
 - `logs/` 目录由 hooks 运行时自动生成，已加入 .gitignore

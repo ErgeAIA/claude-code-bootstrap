@@ -897,6 +897,49 @@ function Install-UserHooks {
 }
 
 # ============================================================
+#  阶段 3.4：预填 ~/.claude.json onboarding 标记（仅 hasCompletedOnboarding）
+# ============================================================
+function Install-ClaudeJson {
+    Write-Step '预填 ~/.claude.json onboarding 标记（跳过全局引导）'
+
+    # 读取现有 .claude.json，合并后回写（避免覆盖 installMethod / autoUpdates / projects 等关键字段）
+    $cfg = @{}
+    if (Test-Path $CONFIG_PATH) {
+        try {
+            $raw = Get-Content -Raw $CONFIG_PATH -Encoding UTF8
+            if (-not [string]::IsNullOrWhiteSpace($raw)) {
+                $parsed = $raw | ConvertFrom-Json -AsHashtable
+                if ($null -ne $parsed) { $cfg = $parsed }
+            }
+        } catch {
+            Write-Warn2 "  现有 .claude.json 解析失败，将以空对象为基础重新构建：$_"
+            $cfg = @{}
+        }
+    }
+    if ($null -eq $cfg) { $cfg = @{} }
+
+    # 仅预填全局 onboarding 标记（刚需、首启向导、零安全风险）
+    # hasTrustDialogAccepted / hasCompletedProjectOnboarding 不在脚本处理：
+    #   - 前者是工作区信任大门，CVE-2026-33068 后保持默认弹出让用户决策更安全
+    #   - 后者需按项目绝对路径写入，反幂等、用户友好度低
+    $cfg['hasCompletedOnboarding'] = $true
+    Write-Info '    [SET] hasCompletedOnboarding = true（跳过主题选择 / 欢迎向导）'
+
+    # 原子写：先写 .tmp 再 Move-Item，避免崩溃留半截
+    $tmp = "$CONFIG_PATH.tmp"
+    $json = $cfg | ConvertTo-Json -Depth 10
+    try {
+        $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+        [System.IO.File]::WriteAllText($tmp, $json, $utf8NoBom)
+        Move-Item -Force $tmp $CONFIG_PATH
+        Write-Ok "  $CONFIG_PATH"
+    } catch {
+        if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+        Write-Err "  .claude.json 写入失败：$_"
+    }
+}
+
+# ============================================================
 #  阶段 3.5：写入 ~/.claude/settings.json（合并 GeneralConfiguration）
 # ============================================================
 function Install-SettingsJson {
@@ -1155,12 +1198,21 @@ function Show-Summary {
         $hookCount = (Get-ChildItem $HOOK_DIR -Filter *.py -ErrorAction SilentlyContinue).Count
         $slCount   = (Get-ChildItem $SL_DIR -Filter *.py -ErrorAction SilentlyContinue).Count
         $settingsExists = Test-Path (Join-Path $CLAUDE_HOME 'settings.json')
+        $onboardingDone = $false
+        if (Test-Path $CONFIG_PATH) {
+            try {
+                $cfgRaw = Get-Content -Raw $CONFIG_PATH -Encoding UTF8
+                $cfgObj = $cfgRaw | ConvertFrom-Json
+                $onboardingDone = [bool]$cfgObj.hasCompletedOnboarding
+            } catch {}
+        }
 
         Write-Info ''
         Write-Host '  已部署文件：' -ForegroundColor White
         Write-Info "    hooks 目录：$hookCount 个 .py（含 4 个用户自写）"
         Write-Info "    status_line 目录：$slCount 个 .py"
         Write-Info "    settings.json：$(if ($settingsExists) { '已生成 ✓' } else { '未生成 ✗' })"
+        Write-Info "    ~/.claude.json: hasCompletedOnboarding = $(if ($onboardingDone) { 'true ✓' } else { 'false ✗' })"
     } else {
         Write-Info ''
         Write-Host '  已部署文件：' -ForegroundColor White
@@ -1212,6 +1264,7 @@ try {
     if ($InstallMode -eq 'Full') {
         Install-UserHooks
         Install-Hooks
+        Install-ClaudeJson
         Install-SettingsJson
     } else {
         Write-Step 'hooks 部署：已跳过（Minimal 模式）'

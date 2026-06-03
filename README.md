@@ -168,6 +168,20 @@ flowchart TD
 
 部署完成后，在 cc-switch 里粘贴通用配置（hooks、permissions、statusLine 等），切换供应商即可生效。
 
+### Onboarding 跳过（Full 模式默认行为）
+
+`Full` 模式会自动在 `~/.claude.json` 中写入 `hasCompletedOnboarding: true`，**首次启动不再弹主题选择/欢迎向导**。该标记：
+
+- **零安全风险**：仅跳过欢迎页，不影响权限/信任/MCP 等关键决策
+- **幂等**：全局标记，写一次永久生效
+- **可手动关闭**：编辑 `~/.claude.json` 删除该字段，或：
+  ```powershell
+  # 重新跑一次，会重写
+  .\setup-claude.ps1 -InstallMode Full -SkipClaudeInstall
+  ```
+
+> ⚠️ `hasTrustDialogAccepted`（工作区信任大门）和 `hasCompletedProjectOnboarding`（项目级 onboarding）**不会**被脚本预填。前者涉及 CVE-2026-33068 类风险，后者需要绝对路径且反幂等。如有需要可手动编辑 `~/.claude.json`。
+
 ## 🔧 三种安装方式对比
 
 | 方式             | 文件位置                               | 是否自动配 PATH | 何时使用                     |
