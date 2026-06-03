@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **scripts/refresh-user-hook-hash.ps1**: 用户自写 hooks 哈希刷新工具，解决 GBK 编码导致的 SHA256 计算错误
+- **CLAUDE.md**: 新增"完整提交流程"工作流约定
 
 ### Changed
 - **hooks/verify_on_stop.py**: 
@@ -20,11 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **hooks/auto_format.py**: 数据驱动架构，`FORMATTERS` 列表替代 if-elif 链，`run_silent` 返回 `bool`
 - **hooks/block_dangerous.py**: 规则升级为 `Rule` NamedTuple（含 severity/why），正则预编译，JSON+stderr 双通道输出
 - **hooks/check_secrets.py**: PostToolUse 语义修正（改用 `hookSpecificOutput.additionalContext`），路径匹配精确化，正则预编译，密钥模式扩展至 15 种
+- **setup-claude.ps1**: Node.js 从硬依赖降级为可选依赖；`Install-Npm` 改为 npm 不可用时自动用 winget 安装 Node.js LTS 并刷新 PATH
+- **scripts/update-checksums.ps1**: `$REPO_BASE` 改为 `$REPO_BASES` 数组，Gitee 优先 + GitHub 备源；`Get-Content` 改为 `[System.IO.File]::ReadAllText`（防乱码）
 
 ### Fixed
 - **install.ps1**: 内容校验阈值 100→1000+CmdletBinding 特征；UTF-8 无 BOM 写入；每个镜像源 3 次重试；退出码在 finally 前捕获
 - **scripts/update-checksums.ps1**: 正则支持大写文件名；UTF-8 无 BOM；新增用户 hook 校验和保留逻辑
 - **setup-claude.ps1**: 嵌入块内容更新同步
+- **setup-claude.ps1**: 从 git 历史恢复全部乱码中文（183 行，UTF-8→GBK→UTF-8→GBK 多重误读）
+- **GeneralConfiguration.json**: 移除 `Read(**/id_rsa)` 和 `Read(**/id_ed25519)` 中的零宽空格（U+200B）
+- **install.ps1**: 注释中的 `iex -InstallMode Full` 错误示例（参数会被 iex 解析）
+
+### Security
+- **CLAUDE.md**: 新增"编码规范（防乱码）"章节，强制 UTF-8 无 BOM；禁止使用 `Get-Content`/`Set-Content`/`Out-File` 处理含中文文件
 
 ### Performance
 - **hooks/verify_on_stop.py**: Stop 事件 checker 并行化，阻塞时间降低 57%（210s → 90s）

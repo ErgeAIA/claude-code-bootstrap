@@ -126,6 +126,29 @@ claude-code-bootstrap/
 - 新建分支、标签同理，需同步到两个远程
 - 如果 Gitee 远程尚未配置，执行：`git remote add gitee https://gitee.com/ErgeAIA/claude-code-bootstrap.git`
 
+### 完整提交流程
+所有代码修改完成后，按以下顺序完成提交，**缺一不可**：
+
+1. **更新 CHANGELOG**（中英双语）
+   - 在 `CHANGELOG.md` 和 `CHANGELOG.en.md` 的 `[Unreleased]` 段追加条目
+   - 按类别归入 `Added` / `Changed` / `Fixed` / `Security` / `Performance` / `Documentation`
+   - 涉及安全修复必须有 `Security` 段；涉及性能优化必须有 `Performance` 段
+2. **运行复审检查**
+   - PowerShell 脚本：用 `Parser::ParseFile` 做语法检查，确保 0 errors
+   - 嵌入 hooks 哈希：用 `refresh-user-hook-hash.ps1` 验证嵌入内容与源文件一致
+   - 乱码检查：用 `Select-String` 搜索典型乱码字符（`閸` `鐎` 等）
+3. **生成 commit 信息**
+   - 格式：`type(scope): subject`（conventional commit）
+   - 关联版本号（如 v1.5.0），参考 CLAUDE.md 顶部历史记录
+4. **双平台推送**
+   - `git push origin <branch> && git push gitee <branch>`
+   - 推送失败时**禁止**跳过，必须解决网络或权限问题后再推
+
+**反例**：
+- 改完代码直接 commit，没更新 CHANGELOG
+- 推送了 GitHub 忘了 Gitee（违反双平台同步约定）
+- 嵌入 hooks 改了但没跑 `refresh-user-hook-hash.ps1`，部署时 SHA256 校验失败
+
 ## 注意事项
 
 - 本项目**会**在 Full 模式下自动生成 `~/.claude/settings.json`，已有配置时交互选择策略（覆盖/合并/跳过/取消）

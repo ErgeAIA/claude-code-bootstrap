@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **scripts/refresh-user-hook-hash.ps1**: User-written hooks hash refresh utility, fixing SHA256 calculation errors caused by GBK encoding
+- **CLAUDE.md**: New "Complete Commit Workflow" convention section
 
 ### Changed
 - **hooks/verify_on_stop.py**: 
@@ -20,11 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **hooks/auto_format.py**: Data-driven architecture, `FORMATTERS` list replaces if-elif chain, `run_silent` returns `bool`
 - **hooks/block_dangerous.py**: Rules upgraded to `Rule` NamedTuple (with severity/why), regex precompiled, JSON+stderr dual-channel output
 - **hooks/check_secrets.py**: PostToolUse semantic fix (using `hookSpecificOutput.additionalContext`), path matching exactification, regex precompiled, secret patterns expanded to 15 types
+- **setup-claude.ps1**: Node.js downgraded from hard dependency to optional; `Install-Npm` now auto-installs Node.js LTS via winget when npm is unavailable
+- **scripts/update-checksums.ps1**: `$REPO_BASE` replaced with `$REPO_BASES` array (Gitee primary + GitHub fallback); `Get-Content` replaced with `[System.IO.File]::ReadAllText` (mojibake prevention)
 
 ### Fixed
 - **install.ps1**: Content validation threshold 100→1000+CmdletBinding; UTF-8 no-BOM write; 3 retries per mirror; exit code captured before finally
 - **scripts/update-checksums.ps1**: Regex supports uppercase filenames; UTF-8 no-BOM; added user hook checksum preservation logic
 - **setup-claude.ps1**: Embedded content updates synchronized
+- **setup-claude.ps1**: Recovered all garbled Chinese (183 lines) from git history (UTF-8→GBK→UTF-8→GBK multi-round mis-decoding)
+- **GeneralConfiguration.json**: Removed zero-width spaces (U+200B) in `Read(**/id_rsa)` and `Read(**/id_ed25519)`
+- **install.ps1**: Incorrect `iex -InstallMode Full` example in comments (parameter would be parsed by iex)
+
+### Security
+- **CLAUDE.md**: New "Encoding Conventions (Mojibake Prevention)" section mandating UTF-8 no-BOM and prohibiting `Get-Content`/`Set-Content`/`Out-File` for Chinese-containing files
 
 ### Performance
 - **hooks/verify_on_stop.py**: Stop event checkers parallelized, blocking time reduced 57% (210s → 90s)
