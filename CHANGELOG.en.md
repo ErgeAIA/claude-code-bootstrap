@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **setup-claude.ps1**: `Test-Prerequisites` shows recommended marker for PowerShell 7.x; warning for 5.1 with upgrade hint (soft warning, non-blocking)
 - **README.md**: Quick start updated from "run as administrator" to "script auto UAC elevation"
 - **CLAUDE.md**: refresh-user-hook-hash.ps1 description fixed; `core.quotepath` downgraded from "mandatory" to "suggested"
+- **setup-claude.ps1**: Simplified hooks download from Gitee + GitHub dual-source to GitHub-only (users must reach api.anthropic.com, so GitHub unavailability is unrealistic); `Invoke-DownloadFile` parameter simplified from `[string[]]$Urls` to `[string]$Url`
+- **scripts/update-checksums.ps1**: Synced to GitHub-only download
 
 ### Fixed
 - **install.ps1**: Content validation threshold 100→1000+CmdletBinding; UTF-8 no-BOM write; 3 retries per mirror; exit code captured before finally

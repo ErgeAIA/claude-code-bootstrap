@@ -47,10 +47,7 @@ $OutputEncoding           = [System.Text.Encoding]::UTF8
 #  常量
 # ============================================================
 $GCS_BUCKET   = 'https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases'
-$REPO_BASES   = @(
-    'https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/.claude',
-    'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
-)
+$REPO_BASE = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
 
 # SHA256 checksums（与仓库根目录 checksums.txt 同步）
 $CHECKSUMS = @{
@@ -1595,28 +1592,25 @@ function Install-SettingsJson {
 # ============================================================
 function Invoke-DownloadFile {
     param(
-        [string[]]$Urls,
+        [string]$Url,
         [string]$Dest,
         [int]$MaxRetry = 3
     )
-    foreach ($url in $Urls) {
-        for ($i = 1; $i -le $MaxRetry; $i++) {
-            try {
-                Invoke-WebRequest -Uri $url -OutFile $Dest -TimeoutSec 30 -ErrorAction Stop
-                if ((Test-Path $Dest) -and (Get-Item $Dest).Length -gt 0) {
-                    return $true
-                }
-                throw '下载文件为空'
-            } catch {
-                if ($i -eq $MaxRetry) {
-                    Write-Warn2 "    源 $url 失败：$_"
-                    break
-                }
-                Start-Sleep -Seconds 2
+    for ($i = 1; $i -le $MaxRetry; $i++) {
+        try {
+            Invoke-WebRequest -Uri $Url -OutFile $Dest -TimeoutSec 30 -ErrorAction Stop
+            if ((Test-Path $Dest) -and (Get-Item $Dest).Length -gt 0) {
+                return $true
             }
+            throw '下载文件为空'
+        } catch {
+            if ($i -eq $MaxRetry) {
+                throw "下载失败（重试 $MaxRetry 次）：$Url — $_"
+            }
+            Write-Warn2 "    重试 $i/$MaxRetry：$_"
+            Start-Sleep -Seconds 2
         }
     }
-    throw "所有源均下载失败：$($Urls -join ', ')"
 }
 
 function Install-Hooks {
@@ -1634,8 +1628,8 @@ function Install-Hooks {
         }
         Write-Info "    [GET ] $f"
         try {
-            $urls = $REPO_BASES | ForEach-Object { "$_/hooks/$f" }
-            Invoke-DownloadFile -Urls $urls -Dest $dest
+            $url = "$REPO_BASE/hooks/$f"
+            Invoke-DownloadFile -Url $url -Dest $dest
             # SHA256 校验
             if ($CHECKSUMS.ContainsKey($f)) {
                 $actual = (Get-FileHash -Path $dest -Algorithm SHA256).Hash.ToUpper()
@@ -1659,8 +1653,8 @@ function Install-Hooks {
     } else {
         Write-Info "  [GET ] $STATUS_LINE"
         try {
-            $slUrls = $REPO_BASES | ForEach-Object { "$_/status_lines/$STATUS_LINE" }
-            Invoke-DownloadFile -Urls $slUrls -Dest $slDest
+            $slUrl = "$REPO_BASE/status_lines/$STATUS_LINE"
+            Invoke-DownloadFile -Url $slUrl -Dest $slDest
             # SHA256 校验
             if ($CHECKSUMS.ContainsKey($STATUS_LINE)) {
                 $actual = (Get-FileHash -Path $slDest -Algorithm SHA256).Hash.ToUpper()

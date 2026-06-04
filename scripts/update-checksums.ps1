@@ -18,10 +18,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$REPO_BASES = @(
-    'https://gitee.com/disler/claude-code-hooks-mastery/raw/main/.claude',
-    'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
-)
+$REPO_BASE = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
 $ROOT_DIR  = Split-Path $PSScriptRoot -Parent
 
 $FILES = @{
@@ -44,21 +41,13 @@ Write-Host '  ==================' -ForegroundColor Cyan
 $newChecksums = [ordered]@{}
 foreach ($entry in $FILES.GetEnumerator() | Sort-Object Key) {
     $tmpFile = Join-Path $env:TEMP $entry.Value
-    $downloaded = $false
-    foreach ($base in $REPO_BASES) {
-        $url = "$base/$($entry.Key)"
-        Write-Host "  [GET] $($entry.Value) ($($base -match 'gitee' ? 'Gitee' : 'GitHub'))..." -ForegroundColor Gray -NoNewline
-        try {
-            Invoke-WebRequest -Uri $url -OutFile $tmpFile -TimeoutSec 30 -ErrorAction Stop
-            $downloaded = $true
-            break
-        } catch {
-            Write-Host "`r  [RETRY] $($entry.Value) from $($base -match 'gitee' ? 'Gitee' : 'GitHub') failed" -ForegroundColor Yellow
-        }
-    }
-    if (-not $downloaded) {
-        Write-Host "`r  [ERR] $($entry.Value): all sources failed" -ForegroundColor Red
-        throw "Failed to download $($entry.Value) from any source"
+    $url = "$REPO_BASE/$($entry.Key)"
+    Write-Host "  [GET] $($entry.Value)..." -ForegroundColor Gray -NoNewline
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $tmpFile -TimeoutSec 30 -ErrorAction Stop
+    } catch {
+        Write-Host "`r  [ERR] $($entry.Value): download failed" -ForegroundColor Red
+        throw "Failed to download $($entry.Value): $_"
     }
     $hash = (Get-FileHash -Path $tmpFile -Algorithm SHA256).Hash.ToUpper()
     $newChecksums[$entry.Value] = $hash

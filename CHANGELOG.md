@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **setup-claude.ps1**: `Test-Prerequisites` 中对 PowerShell 7.x 显示推荐标记；5.1 显示警告并提示升级到 7.x（软警告，不阻塞）
 - **README.md**: 快速开始段从"以管理员身份打开"改为"脚本自动 UAC 提升"
 - **CLAUDE.md**: refresh-user-hook-hash.ps1 描述修正为"避免 UTF-8 被 GBK 误读"；`core.quotepath` 从"强制规则"改为"建议配置"
+- **setup-claude.ps1**: hooks 下载从 Gitee + GitHub 双源简化为 GitHub 单源（用户需访问 api.anthropic.com，GitHub 不可达的场景不现实）；`Invoke-DownloadFile` 参数从 `[string[]]$Urls` 简化为 `[string]$Url`
+- **scripts/update-checksums.ps1**: 同步简化为 GitHub 单源下载
 
 ### Fixed
 - **install.ps1**: 内容校验阈值 100→1000+CmdletBinding 特征；UTF-8 无 BOM 写入；每个镜像源 3 次重试；退出码在 finally 前捕获

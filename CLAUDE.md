@@ -49,7 +49,7 @@ claude-code-bootstrap/
 7. **策略选择**（仅 Full 模式）：`Read-SettingsJsonStrategy` 检测到 settings.json 已存在时交互选择，覆盖 / 合并 / 跳过 / 取消（取消则 exit 0）
 8. **Hooks 部署**（仅 Full 模式）：
    - **用户自写 hooks**（4 个）从 `setup-claude.ps1` 的 `$USER_HOOKS_CONTENT` 嵌入内容写入，离线可用；已存在的 hooks 跳过不覆盖（`Test-Path` 跳过）
-   - **disler 仓库 hooks**（6 个）+ status_line_v6 联网下载，Gitee + GitHub 双源，国内优先 Gitee
+   - **disler 仓库 hooks**（6 个）+ status_line_v6 联网下载（GitHub 单源），下载后 SHA256 校验
    - 下载/写入后 SHA256 校验，不匹配则删除文件并报错
    - 校验和维护在 `checksums.txt` 和 `$CHECKSUMS` 哈希表中
 9. **settings.json 生成**（仅 Full 模式）：根据策略 `Install-SettingsJson -Strategy <fresh|overwrite|merge|skip>` 写入 `~/.claude/settings.json`

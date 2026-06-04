@@ -92,7 +92,6 @@ flowchart TD
 | 🪝 **hooks 可选部署** | 交互选择是否安装，默认不部署，尊重安全考量 |
 | 📋 **依赖自检**       | PowerShell、Git、UV 缺啥补啥              |
 | 🔒 **hooks 安全校验** | SHA256 校验防篡改，校验失败自动删除        |
-| 🌐 **hooks 双源下载** | Gitee + GitHub 双源，国内优先 Gitee        |
 
 ## 📦 包含内容
 
