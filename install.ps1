@@ -49,6 +49,16 @@ if (-not $isAdmin) {
         Write-Host '  [ERROR] UAC denied — admin privileges required' -ForegroundColor Red
         Write-Host '  Right-click PowerShell and select "Run as administrator"' -ForegroundColor Yellow
         Write-Host ''
+        Write-Host '  Press Enter to close...' -ForegroundColor Gray
+        [void][Console]::ReadLine()
+        exit 1
+    } catch {
+        Write-Host ''
+        Write-Host "  [ERROR] UAC elevation failed: $_" -ForegroundColor Red
+        Write-Host $_.ScriptStackTrace -ForegroundColor Red
+        Write-Host ''
+        Write-Host '  Press Enter to close...' -ForegroundColor Gray
+        [void][Console]::ReadLine()
         exit 1
     } finally {
         if ($scriptPath -ne $MyInvocation.MyCommand.Path -and (Test-Path $scriptPath)) {
@@ -131,7 +141,16 @@ $exitCode = 0
 try {
     & $pwshCmd -NoLogo -NoProfile -ExecutionPolicy Bypass -File $tmpScript @args
     $exitCode = $LASTEXITCODE
+} catch {
+    Write-Host ''
+    Write-Host "  [FATAL] Subprocess failed: $_" -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor Red
+    $exitCode = 1
 } finally {
     Remove-Item $tmpScript -Force -ErrorAction SilentlyContinue
 }
+Write-Host ''
+Write-Host "  Installation finished (exit code: $exitCode)" -ForegroundColor $(if ($exitCode -eq 0) { 'Green' } else { 'Red' })
+Write-Host '  Press Enter to close...' -ForegroundColor Gray
+[void][Console]::ReadLine()
 exit $exitCode
