@@ -77,7 +77,7 @@ $TIMEOUT_SEC = 10
 $tmpScript   = Join-Path $env:TEMP "setup-claude-$([guid]::NewGuid()).ps1"
 
 Write-Host ''
-Write-Host '  ErgeAIA / Claude Code Bootstrap  v1.5.0' -ForegroundColor Cyan
+Write-Host '  ErgeAIA / Claude Code Bootstrap  v1.6.0' -ForegroundColor Cyan
 Write-Host '  正在启动安装程序...' -ForegroundColor Gray
 Write-Host ''
 

@@ -1827,7 +1827,7 @@ try {
     Write-Host '                                          █     █ █   █  █  █     █  █ ██ █  █' -ForegroundColor Cyan
     Write-Host '                                          ████  █  █  ████  ████  █  █ ██ █  █' -ForegroundColor Cyan
     Write-Host ''
-    Write-Host '                                          Claude Code Bootstrap  v1.5.0' -ForegroundColor White
+    Write-Host '                                          Claude Code Bootstrap  v1.6.0' -ForegroundColor White
     Write-Host '                                          by ' -ForegroundColor DarkCyan -NoNewline
     Write-Host '宝藏二哥AIA' -ForegroundColor Yellow
 

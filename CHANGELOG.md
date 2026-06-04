@@ -7,13 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-04
+
+### Added
+- **setup-claude.ps1**: 安装模式选择新增 `[0] 退出安装` 选项；`[1]` 标签从"推荐"改为"默认"
+- **setup-claude.ps1**: 欢迎界面 ASCII art banner（block 字符 ErgeAIA Logo + 作者信息"宝藏二哥AIA"）
+- **install.ps1**: 两阶段引导机制——`iwr | iex` 时先用 `curl.exe` 下载脚本到文件（保留 UTF-8），再用 `-File` 执行，解决中文乱码
+
 ### Changed
 - **setup-claude.ps1**: `Test-Prerequisites` 重构为环境检测报告模式——收集所有检测项结果后统一输出表格报告（通过/建议/可选/阻断），不再逐项 `exit 1` 中途退出
-- **install.ps1**: 所有用户可见中文改为英文，规避 `iwr | iex` 管道中 `Invoke-WebRequest` 用系统默认 GBK 解码 UTF-8 响应导致的乱码
+- **setup-claude.ps1**: 主流程调整为先环境检测、再选择安装模式（依赖配置在前）
+- **install.ps1**: 移除 UAC 自动提升逻辑（`Start-Process -Verb RunAs -Wait` 在 UAC 对话框被遮挡时无限等待导致空白窗口）
+- **install.ps1**: Bootstrap 双源下载（Gitee 优先 + GitHub 兜底），解决 GitHub raw CDN 缓存更新慢的问题
+- **setup-claude.ps1**: UV 自动安装改用 `Start-Process -NoNewWindow -Wait` 同步子进程，避免 `Stop-Job` 抛出 `PipelineStoppedException` 绕过 try/catch 终止父进程
+- **setup-claude.ps1**: `Test-Prerequisites` 调用处增加 try/catch 防御，错误时显示详情并暂停
 
 ### Fixed
 - **setup-claude.ps1**: `Test-Prerequisites` 重构后残留的多余闭合大括号导致语法错误
-- **setup-claude.ps1**: UV 自动安装改用 `Start-Job` 子进程执行，避免安装脚本内部 `exit` 终止父进程导致窗口直接关闭
+- **install.ps1**: `@(...) + $args` 作为 `-ArgumentList` 值在 `Invoke-Expression` 上下文中抛 `ParameterBindingException`，改为先赋值变量再传参
+- **install.ps1**: 编辑遗留的重复行导致 try/catch 块解析失败
 
 ## [1.5.0] - 2026-06-04
 
@@ -179,7 +191,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - hooks 工作流部署
 - 国内网络环境优化配置
 
-[Unreleased]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.2.0...v1.3.0

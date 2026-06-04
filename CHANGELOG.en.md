@@ -7,13 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-04
+
+### Added
+- **setup-claude.ps1**: Install mode selection adds `[0] Exit` option; `[1]` label changed from "recommended" to "default"
+- **setup-claude.ps1**: ASCII art welcome banner with block-character ErgeAIA logo + author credit "宝藏二哥AIA"
+- **install.ps1**: Two-stage bootstrap — downloads script with `curl.exe` (preserves UTF-8) then re-executes via `-File`, fixing Chinese garbled output in `iwr | iex`
+
 ### Changed
 - **setup-claude.ps1**: `Test-Prerequisites` refactored as environment report — collects all check results, then prints a formatted table (pass/suggest/optional/block), no longer `exit 1` midway
-- **install.ps1**: All user-facing Chinese text changed to English to avoid garbled output from `Invoke-WebRequest` GBK decoding in `iwr | iex` pipeline
+- **setup-claude.ps1**: Main flow reordered: environment check before install mode selection (dependencies first)
+- **install.ps1**: Removed UAC auto-elevation (`Start-Process -Verb RunAs -Wait` hangs when UAC dialog is hidden)
+- **install.ps1**: Bootstrap dual-source download (Gitee priority + GitHub fallback) for faster CDN propagation
+- **setup-claude.ps1**: UV auto-install uses `Start-Process -NoNewWindow -Wait` synchronous subprocess, avoiding `Stop-Job` `PipelineStoppedException` that bypasses try/catch
+- **setup-claude.ps1**: Added try/catch around `Test-Prerequisites` call for defensive error handling
 
 ### Fixed
-- **setup-claude.ps1**: Stray closing brace after `Test-Prerequisites` refactor caused parser error at line 928
-- **setup-claude.ps1**: UV auto-install now runs in `Start-Job` subprocess to prevent the install script's internal `exit` from killing the parent process
+- **setup-claude.ps1**: Stray closing brace after `Test-Prerequisites` refactor caused parser error
+- **install.ps1**: `@(...) + $args` as `-ArgumentList` value throws `ParameterBindingException` in `Invoke-Expression` context; assign to variable first
+- **install.ps1**: Duplicate lines from edit caused try/catch block parse failure
 
 ## [1.5.0] - 2026-06-04
 
@@ -180,7 +192,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hooks workflow deployment
 - China network environment optimization
 
-[Unreleased]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.2.0...v1.3.0
