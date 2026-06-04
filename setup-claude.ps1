@@ -925,7 +925,6 @@ function Test-Prerequisites {
     }
     return $true
 }
-}
 
 # ============================================================
 #  阶段 2a：Claude Code 安装

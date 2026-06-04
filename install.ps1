@@ -27,8 +27,8 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 )
 if (-not $isAdmin) {
     Write-Host ''
-    Write-Host '  [INFO] 当前进程非管理员权限，需要 UAC 提升' -ForegroundColor Yellow
-    Write-Host '        即将弹出 UAC 对话框，请点击"是"授权' -ForegroundColor Yellow
+    Write-Host '  [INFO] Not running as admin, requesting UAC elevation' -ForegroundColor Yellow
+    Write-Host '        A UAC prompt will appear — click "Yes" to continue' -ForegroundColor Yellow
     Write-Host ''
     $pwshCmdCheck = if (Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
     $scriptPath = if ($MyInvocation.MyCommand.Path) {
@@ -48,8 +48,8 @@ if (-not $isAdmin) {
         exit $proc.ExitCode
     } catch [System.ComponentModel.Win32Exception] {
         Write-Host ''
-        Write-Host '  [ERROR] UAC 提升被拒绝，需要管理员权限才能继续' -ForegroundColor Red
-        Write-Host '  请右键 PowerShell 选择"以管理员身份运行"后重试' -ForegroundColor Yellow
+        Write-Host '  [ERROR] UAC denied — admin privileges required' -ForegroundColor Red
+        Write-Host '  Right-click PowerShell and select "Run as administrator"' -ForegroundColor Yellow
         Write-Host ''
         exit 1
     } finally {
@@ -64,11 +64,11 @@ if (-not $isAdmin) {
 # ============================================================
 $SOURCES = @(
     @{
-        Name = 'Gitee（国内推荐）'
+        Name = 'Gitee (China)'
         Url  = 'https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/setup-claude.ps1'
     },
     @{
-        Name = 'GitHub（国外推荐）'
+        Name = 'GitHub (Global)'
         Url  = 'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/setup-claude.ps1'
     }
 )
@@ -77,15 +77,15 @@ $TIMEOUT_SEC = 10
 $tmpScript   = Join-Path $env:TEMP "setup-claude-$([guid]::NewGuid()).ps1"
 
 Write-Host ''
-Write-Host '  claude-code-bootstrap 入口' -ForegroundColor Cyan
-Write-Host '  ===========================' -ForegroundColor Cyan
-Write-Host '  正在选择最快镜像...' -ForegroundColor Gray
+Write-Host '  claude-code-bootstrap installer' -ForegroundColor Cyan
+Write-Host '  ================================' -ForegroundColor Cyan
+Write-Host '  Selecting fastest mirror...' -ForegroundColor Gray
 Write-Host ''
 
 $downloaded = $false
 foreach ($src in $SOURCES) {
     for ($attempt = 1; $attempt -le 3; $attempt++) {
-        Write-Host "  [ ] 尝试: $($src.Name)" -ForegroundColor Gray -NoNewline
+        Write-Host "  [ ] Trying: $($src.Name)" -ForegroundColor Gray -NoNewline
         try {
             # 用 -OutFile 直接写原始字节，避免 .Content 属性在中文 Windows 上用 GBK 解码导致乱码
             Invoke-WebRequest -Uri $src.Url -OutFile $tmpScript -TimeoutSec $TIMEOUT_SEC -UseBasicParsing -ErrorAction Stop
@@ -99,18 +99,18 @@ foreach ($src in $SOURCES) {
                 break
             }
             if ($attempt -lt 3) {
-                Write-Host "`r  [RETRY] $($src.Name)（内容校验失败）" -ForegroundColor Yellow
+                Write-Host "`r  [RETRY] $($src.Name) (validation failed)" -ForegroundColor Yellow
                 Start-Sleep -Seconds 2
                 continue
             }
-            Write-Host "`r  [FAIL] $($src.Name)（内容校验失败）" -ForegroundColor Yellow
+            Write-Host "`r  [FAIL] $($src.Name) (validation failed)" -ForegroundColor Yellow
         } catch {
             if ($attempt -lt 3) {
-                Write-Host "`r  [RETRY] $($src.Name)（超时/网络）" -ForegroundColor Yellow
+                Write-Host "`r  [RETRY] $($src.Name) (timeout/network)" -ForegroundColor Yellow
                 Start-Sleep -Seconds 2
                 continue
             }
-            Write-Host "`r  [FAIL] $($src.Name)（超时/网络）" -ForegroundColor Yellow
+            Write-Host "`r  [FAIL] $($src.Name) (timeout/network)" -ForegroundColor Yellow
         }
     }
     if ($downloaded) { break }
@@ -118,13 +118,13 @@ foreach ($src in $SOURCES) {
 
 if (-not $downloaded) {
     Write-Host ''
-    Write-Host '  [ERROR] 所有镜像源均不可达，请检查网络后重试' -ForegroundColor Red
-    Write-Host '  备用方式：手动克隆仓库后运行 setup-claude.ps1' -ForegroundColor Yellow
+    Write-Host '  [ERROR] All mirrors unreachable — check your network' -ForegroundColor Red
+    Write-Host '  Fallback: clone the repo and run setup-claude.ps1 locally' -ForegroundColor Yellow
     exit 1
 }
 
 Write-Host ''
-Write-Host '  开始执行安装...' -ForegroundColor Cyan
+Write-Host '  Starting installation...' -ForegroundColor Cyan
 Write-Host ''
 
 # 移交到主体脚本（优先 pwsh.exe，回退 powershell.exe）

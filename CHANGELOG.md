@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **setup-claude.ps1**: `Test-Prerequisites` 重构为环境检测报告模式——收集所有检测项结果后统一输出表格报告（通过/建议/可选/阻断），不再逐项 `exit 1` 中途退出
+- **install.ps1**: 所有用户可见中文改为英文，规避 `iwr | iex` 管道中 `Invoke-WebRequest` 用系统默认 GBK 解码 UTF-8 响应导致的乱码
+
+### Fixed
+- **setup-claude.ps1**: `Test-Prerequisites` 重构后残留的多余闭合大括号导致语法错误
 
 ## [1.5.0] - 2026-06-04
 
