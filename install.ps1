@@ -24,14 +24,31 @@ $ProgressPreference       = 'SilentlyContinue'
 # ============================================================
 if (-not $env:_CC_BOOTSTRAPPED) {
     $env:_CC_BOOTSTRAPPED = '1'
-    $selfUrl = 'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1'
+    # 双源引导：Gitee 优先（国内 CDN 更新快），GitHub 兜底
+    $selfUrls = @(
+        'https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1',
+        'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1'
+    )
     $tmpSelf = Join-Path $env:TEMP "install-$([guid]::NewGuid()).ps1"
 
     try {
-        if (Get-Command 'curl.exe' -ErrorAction SilentlyContinue) {
-            & curl.exe -fsSL --retry 3 --retry-delay 2 -o $tmpSelf $selfUrl
-        } else {
-            Invoke-WebRequest -Uri $selfUrl -OutFile $tmpSelf -UseBasicParsing -ErrorAction Stop
+        $downloaded = $false
+        foreach ($url in $selfUrls) {
+            try {
+                if (Get-Command 'curl.exe' -ErrorAction SilentlyContinue) {
+                    & curl.exe -fsSL --retry 2 --retry-delay 1 -o $tmpSelf $url
+                } else {
+                    Invoke-WebRequest -Uri $url -OutFile $tmpSelf -UseBasicParsing -ErrorAction Stop
+                }
+                if ((Test-Path $tmpSelf) -and (Get-Item $tmpSelf).Length -gt 1000) {
+                    $downloaded = $true
+                    break
+                }
+            } catch { continue }
+        }
+        if (-not $downloaded) { throw 'All bootstrap mirrors failed' }
+        $pwshCmd = if (Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
+        & $pwshCmd -NoLogo -NoProfile -ExecutionPolicy Bypass -File $tmpSelf @args
         }
         $pwshCmd = if (Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
         & $pwshCmd -NoLogo -NoProfile -ExecutionPolicy Bypass -File $tmpSelf @args
