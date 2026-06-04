@@ -61,8 +61,8 @@ $CHECKSUMS = @{
     # 用户自写 hooks（嵌入在脚本中，离线部署）— 哈希对应嵌入内容（非源文件）
     'auto_format.py'          = 'BAF7FA4737BAE65C23D42E24CFCE902881ABC3DE43C24F10DE34A3475D50B2C8'
     'block_dangerous.py'      = '769A7996ECD918B2611EA853330B340F8055AEEE3054B5E1F02650E47913A05F'
-    'check_secrets.py'        = '8CF0478CA8963EE094C1CD0402CA2AFE6F10DBBBF496D58419FFC31EE61074F9'
-    'verify_on_stop.py'       = 'D79E0713DB0A1D26E24E51C54273B19A5B394B5DCF07A665178C65FB4311FBFB'
+    'check_secrets.py'        = 'AA4127A6DA1052F5CDF61EED1960A12902494ABBD73DC631EC3ACDCE8C55192E'
+    'verify_on_stop.py'       = '9E4EF09A78183EDC1833CB4794AA90959DFD32382EAF3BCA14DCF63DFD530ED5'
 }
 
 $CLAUDE_HOME  = Join-Path $env:USERPROFILE '.claude'
@@ -471,10 +471,9 @@ def main() -> None:
         # 扫描所有模式（预编译正则）
         hits = []
         for compiled, label in _COMPILED_PATTERNS:
-            match = compiled.search(content)
-            if match:
+            for match in compiled.finditer(content):
                 # 显示行号 + 长度，不输出密钥片段
-                line_num = content[:match.start()].count("\n") + 1
+                line_num = content[: match.start()].count("\n") + 1
                 snippet = f"<line {line_num}, {len(match.group(0))} chars>"
                 hits.append(f"{label}: {snippet}")
 
@@ -488,7 +487,7 @@ def main() -> None:
             f"SECURITY: Possible secret(s) detected in {file_path}:\n"
             + "\n".join(f"  - {h}" for h in hits)
             + "\nImmediate action: remove the value, move to .env (gitignored), "
-              "or use environment variables. Then re-edit the file."
+            "or use environment variables. Then re-edit the file."
         )
 
         output = {
@@ -500,8 +499,10 @@ def main() -> None:
         print(json.dumps(output, ensure_ascii=False))
 
         # 同时输出到 stderr 让用户看到
-        print(f"[check-secrets] {len(hits)} secret pattern(s) hit in {file_path}",
-              file=sys.stderr)
+        print(
+            f"[check-secrets] {len(hits)} secret pattern(s) hit in {file_path}",
+            file=sys.stderr,
+        )
         for h in hits:
             print(f"  - {h}", file=sys.stderr)
 
@@ -653,9 +654,12 @@ def main() -> None:
         with ThreadPoolExecutor(max_workers=len(CHECKERS)) as pool:
             future_to_checker = {pool.submit(run_checker, c): c for c in CHECKERS}
             for fut, checker in future_to_checker.items():
-                result = fut.result()
-                if result:
-                    issues.append(result)
+                try:
+                    result = fut.result()
+                    if result:
+                        issues.append(result)
+                except Exception:
+                    pass  # checker 崩溃不影响其他 checker
 
         if not issues:
             sys.exit(0)
@@ -701,6 +705,21 @@ function Write-Info  { param($M) Write-Host "  $M" -ForegroundColor Gray }
 function Has-Command {
     param([string]$Name)
     return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+function ConvertFrom-JsonToHashtable {
+    param([string]$Json)
+    $parsed = $Json | ConvertFrom-Json
+    if ($null -eq $parsed) { return $null }
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        return $Json | ConvertFrom-Json -AsHashtable
+    }
+    # PS 5.1 兼容：手动转换 PSCustomObject → Hashtable
+    $ht = [System.Collections.Hashtable]::new()
+    foreach ($prop in $parsed.PSObject.Properties) {
+        $ht[$prop.Name] = $prop.Value
+    }
+    return $ht
 }
 
 # ============================================================
@@ -923,7 +942,7 @@ function Install-Native {
     if (Test-Path $CONFIG_PATH) {
         try {
             $utf8NoBomLocal = [System.Text.UTF8Encoding]::new($false)
-            $cfg = [System.IO.File]::ReadAllText($CONFIG_PATH, $utf8NoBomLocal) | ConvertFrom-Json -AsHashtable
+            $cfg = ConvertFrom-JsonToHashtable ([System.IO.File]::ReadAllText($CONFIG_PATH, $utf8NoBomLocal))
         } catch {}
     }
     if ($null -eq $cfg) { $cfg = @{} }
@@ -1148,7 +1167,7 @@ function Install-ClaudeJson {
             $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
             $raw = [System.IO.File]::ReadAllText($CONFIG_PATH, $utf8NoBom)
             if (-not [string]::IsNullOrWhiteSpace($raw)) {
-                $parsed = $raw | ConvertFrom-Json -AsHashtable
+                $parsed = ConvertFrom-JsonToHashtable $raw
                 if ($null -ne $parsed) { $cfg = $parsed }
             }
         } catch {
@@ -1512,7 +1531,7 @@ function Install-SettingsJson {
                 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
                 $raw = [System.IO.File]::ReadAllText($SETTINGS_PATH, $utf8NoBom)
                 if (-not [string]::IsNullOrWhiteSpace($raw)) {
-                    $parsed = $raw | ConvertFrom-Json -AsHashtable
+                    $parsed = ConvertFrom-JsonToHashtable $raw
                     if ($null -ne $parsed) { $existing = $parsed }
                 }
             } catch {

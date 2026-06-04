@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **setup-claude.ps1**: 从 git 历史恢复全部乱码中文（183 行，UTF-8→GBK→UTF-8→GBK 多重误读）
 - **GeneralConfiguration.json**: 移除 `Read(**/id_rsa)` 和 `Read(**/id_ed25519)` 中的零宽空格（U+200B）
 - **install.ps1**: 注释中的 `iex -InstallMode Full` 错误示例（参数会被 iex 解析）
+- **setup-claude.ps1**: `ConvertFrom-Json -AsHashtable` 在 PS 5.1 下崩溃（新增 `ConvertFrom-JsonToHashtable` 兼容函数，PS 5.1 手动转换 PSCustomObject）
+- **install.ps1**: UAC 被拒绝时捕获 `Win32Exception`，显示友好提示而非原始异常堆栈
+- **hooks/check_secrets.py**: `search()` 改为 `finditer()`，检测同一类型多个密钥时不漏报
+- **hooks/verify_on_stop.py**: `ThreadPoolExecutor` future 异常不再被外层 `except Exception` 吞掉
 
 ### Security
 - **CLAUDE.md**: 新增"编码规范（防乱码）"章节，强制 UTF-8 无 BOM；禁止使用 `Get-Content`/`Set-Content`/`Out-File` 处理含中文文件

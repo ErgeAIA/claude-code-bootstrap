@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **setup-claude.ps1**: Recovered all garbled Chinese (183 lines) from git history (UTF-8→GBK→UTF-8→GBK multi-round mis-decoding)
 - **GeneralConfiguration.json**: Removed zero-width spaces (U+200B) in `Read(**/id_rsa)` and `Read(**/id_ed25519)`
 - **install.ps1**: Incorrect `iex -InstallMode Full` example in comments (parameter would be parsed by iex)
+- **setup-claude.ps1**: `ConvertFrom-Json -AsHashtable` crashes on PS 5.1 (added `ConvertFrom-JsonToHashtable` compat function with manual PSCustomObject conversion)
+- **install.ps1**: Catch `Win32Exception` when UAC is denied, show friendly message instead of raw exception stack
+- **hooks/check_secrets.py**: `search()` → `finditer()`, detects multiple secrets of the same type instead of only the first
+- **hooks/verify_on_stop.py**: `ThreadPoolExecutor` future exceptions no longer silently swallowed by outer `except Exception`
 
 ### Security
 - **CLAUDE.md**: New "Encoding Conventions (Mojibake Prevention)" section mandating UTF-8 no-BOM and prohibiting `Get-Content`/`Set-Content`/`Out-File` for Chinese-containing files

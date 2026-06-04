@@ -46,6 +46,12 @@ if (-not $isAdmin) {
             '-File', $scriptPath
         ) + $args -Verb RunAs -Wait -PassThru
         exit $proc.ExitCode
+    } catch [System.ComponentModel.Win32Exception] {
+        Write-Host ''
+        Write-Host '  [ERROR] UAC 提升被拒绝，需要管理员权限才能继续' -ForegroundColor Red
+        Write-Host '  请右键 PowerShell 选择"以管理员身份运行"后重试' -ForegroundColor Yellow
+        Write-Host ''
+        exit 1
     } finally {
         if ($scriptPath -ne $MyInvocation.MyCommand.Path -and (Test-Path $scriptPath)) {
             Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue

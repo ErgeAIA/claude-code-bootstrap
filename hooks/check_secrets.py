@@ -3,6 +3,7 @@
 # requires-python = ">=3.8"
 # ///
 from __future__ import annotations
+
 """
 检测 Claude 写入文件时是否包含密钥。
 事件: PostToolUse (Write|Edit|MultiEdit) - 注意 PostToolUse 不可阻塞
@@ -48,9 +49,18 @@ _COMPILED_PATTERNS: list[tuple[re.Pattern, str]] = [
 
 # 路径段精确匹配（目录名，避免 "test_utils.py" 误命中 "test"）
 _SKIP_PATH_SEGMENTS = {
-    "tests", "test", "__tests__", "spec", "specs",
-    "fixtures", "mocks", "examples", "samples", "testdata",
-    "docs", "documentation",
+    "tests",
+    "test",
+    "__tests__",
+    "spec",
+    "specs",
+    "fixtures",
+    "mocks",
+    "examples",
+    "samples",
+    "testdata",
+    "docs",
+    "documentation",
 }
 
 # 文件后缀精确匹配
@@ -100,10 +110,9 @@ def main() -> None:
         # 扫描所有模式（预编译正则）
         hits = []
         for compiled, label in _COMPILED_PATTERNS:
-            match = compiled.search(content)
-            if match:
+            for match in compiled.finditer(content):
                 # 显示行号 + 长度，不输出密钥片段
-                line_num = content[:match.start()].count("\n") + 1
+                line_num = content[: match.start()].count("\n") + 1
                 snippet = f"<line {line_num}, {len(match.group(0))} chars>"
                 hits.append(f"{label}: {snippet}")
 
@@ -117,7 +126,7 @@ def main() -> None:
             f"SECURITY: Possible secret(s) detected in {file_path}:\n"
             + "\n".join(f"  - {h}" for h in hits)
             + "\nImmediate action: remove the value, move to .env (gitignored), "
-              "or use environment variables. Then re-edit the file."
+            "or use environment variables. Then re-edit the file."
         )
 
         output = {
@@ -129,8 +138,10 @@ def main() -> None:
         print(json.dumps(output, ensure_ascii=False))
 
         # 同时输出到 stderr 让用户看到
-        print(f"[check-secrets] {len(hits)} secret pattern(s) hit in {file_path}",
-              file=sys.stderr)
+        print(
+            f"[check-secrets] {len(hits)} secret pattern(s) hit in {file_path}",
+            file=sys.stderr,
+        )
         for h in hits:
             print(f"  - {h}", file=sys.stderr)
 

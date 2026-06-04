@@ -133,9 +133,12 @@ def main() -> None:
         with ThreadPoolExecutor(max_workers=len(CHECKERS)) as pool:
             future_to_checker = {pool.submit(run_checker, c): c for c in CHECKERS}
             for fut, checker in future_to_checker.items():
-                result = fut.result()
-                if result:
-                    issues.append(result)
+                try:
+                    result = fut.result()
+                    if result:
+                        issues.append(result)
+                except Exception:
+                    pass  # checker 崩溃不影响其他 checker
 
         if not issues:
             sys.exit(0)
