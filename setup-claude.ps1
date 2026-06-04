@@ -854,27 +854,20 @@ function Test-Prerequisites {
     } else {
         [void]$results.Add(@{ Name = 'UV'; Value = '安装中...'; Status = 'AUTO'; Note = '自动安装' })
         try {
-            # 用子进程执行 UV 安装脚本，避免其内部 exit 终止父进程
-            $uvJob = Start-Job -ScriptBlock {
-                irm https://astral.sh/uv/install.ps1 | iex
-            }
-            $uvFinished = Wait-Job $uvJob -Timeout 60
-            if ($null -eq $uvFinished) {
-                Stop-Job $uvJob -ErrorAction SilentlyContinue
-                Remove-Job $uvJob -Force -ErrorAction SilentlyContinue
-                $results[$results.Count - 1] = @{ Name = 'UV'; Value = '安装超时'; Status = 'FAIL'; Note = '手动: irm https://astral.sh/uv/install.ps1 | iex' }
-                $blockers++
+            # 用同步子进程执行 UV 安装脚本，避免其内部 exit 终止父进程
+            # 用 -Command 而非 -File，因为安装脚本是管道表达式
+            $uvProc = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
+                'irm https://astral.sh/uv/install.ps1 | iex'
+            ) -NoNewWindow -Wait -PassThru -ErrorAction Stop
+            # 刷新 PATH 以识别新安装的 uv
+            $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+            if (Has-Command 'uv') {
+                $uvVer = (& uv --version) -replace 'uv ', ''
+                $results[$results.Count - 1] = @{ Name = 'UV'; Value = $uvVer; Status = 'OK'; Note = '自动安装完成' }
             } else {
-                Remove-Job $uvJob -Force -ErrorAction SilentlyContinue
-                # 刷新 PATH 以识别新安装的 uv
-                $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
-                if (Has-Command 'uv') {
-                    $uvVer = (& uv --version) -replace 'uv ', ''
-                    $results[$results.Count - 1] = @{ Name = 'UV'; Value = $uvVer; Status = 'OK'; Note = '自动安装完成' }
-                } else {
-                    $results[$results.Count - 1] = @{ Name = 'UV'; Value = '安装失败'; Status = 'FAIL'; Note = '手动: irm https://astral.sh/uv/install.ps1 | iex' }
-                    $blockers++
-                }
+                $results[$results.Count - 1] = @{ Name = 'UV'; Value = '安装失败'; Status = 'FAIL'; Note = "手动: irm https://astral.sh/uv/install.ps1 | iex (exit $($uvProc.ExitCode))" }
+                $blockers++
             }
         } catch {
             $results[$results.Count - 1] = @{ Name = 'UV'; Value = '安装失败'; Status = 'FAIL'; Note = "手动安装 ($_)" }
@@ -1834,7 +1827,19 @@ try {
     Write-Host ''
     Write-Host "  安装模式：$InstallMode" -ForegroundColor $(if ($InstallMode -eq 'Full') { 'Yellow' } else { 'Green' })
 
-    if (-not (Test-Prerequisites)) { exit 1 }
+    try {
+        $prereqOk = Test-Prerequisites
+    } catch {
+        Write-Err "Environment check failed: $_"
+        Write-Host $_.ScriptStackTrace -ForegroundColor Red
+        $prereqOk = $false
+    }
+    if (-not $prereqOk) {
+        Write-Host ''
+        Write-Host '  Press Enter to exit...' -ForegroundColor Gray
+        [void][Console]::ReadLine()
+        exit 1
+    }
 
     # 防御性初始化
     $settingsStrategy = 'fresh'
@@ -1873,5 +1878,8 @@ try {
     Write-Host ''
     Write-Host "  [FATAL] $_" -ForegroundColor Red
     Write-Host $_.ScriptStackTrace -ForegroundColor Red
+    Write-Host ''
+    Write-Host '  Press Enter to exit...' -ForegroundColor Gray
+    [void][Console]::ReadLine()
     exit 1
 }
