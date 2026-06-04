@@ -41,10 +41,8 @@ if (-not $isAdmin) {
         $tmpForUac
     }
     try {
-        $proc = Start-Process -FilePath $pwshCmdCheck -ArgumentList @(
-            '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-            '-File', $scriptPath
-        ) + $args -Verb RunAs -Wait -PassThru
+        $uacArgs = @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptPath) + @($args)
+        $proc = Start-Process -FilePath $pwshCmdCheck -ArgumentList $uacArgs -Verb RunAs -Wait -PassThru
         exit $proc.ExitCode
     } catch [System.ComponentModel.Win32Exception] {
         Write-Host ''
