@@ -730,7 +730,9 @@ function Read-InstallMode {
     Write-Host ''
     Write-Host '  请选择安装模式：' -ForegroundColor White
     Write-Host ''
-    Write-Host '    [1] 仅安装 Claude Code（推荐）' -ForegroundColor Green
+    Write-Host '    [0] 退出安装' -ForegroundColor Red
+    Write-Host ''
+    Write-Host '    [1] 仅安装 Claude Code（默认）' -ForegroundColor Green
     Write-Host '        安装 Claude Code 本体 + PATH 配置' -ForegroundColor Gray
     Write-Host '        不下载任何 hooks 或 status_line' -ForegroundColor Gray
     Write-Host ''
@@ -740,13 +742,14 @@ function Read-InstallMode {
     Write-Host ''
 
     while ($true) {
-        Write-Host '  请输入选择 [1/2]（默认 1）：' -ForegroundColor Cyan -NoNewline
+        Write-Host '  请输入选择 [0/1/2]（默认 1）：' -ForegroundColor Cyan -NoNewline
         $choice = (Read-Host).Trim()
         if ([string]::IsNullOrEmpty($choice)) { $choice = '1' }
         switch ($choice) {
+            '0' { Write-Host '  已退出安装' -ForegroundColor Yellow; exit 0 }
             '1' { return 'Minimal' }
             '2' { return 'Full' }
-            default { Write-Host '  无效输入，请输入 1 或 2' -ForegroundColor Red }
+            default { Write-Host '  无效输入，请输入 0、1 或 2' -ForegroundColor Red }
         }
     }
 }
