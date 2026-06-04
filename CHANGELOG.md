@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **setup-claude.ps1**: 用户 hooks 从嵌入脚本改为从仓库下载，与 disler hooks 统一处理；脚本体积从 73KB / 1897 行缩减至 52KB / 1257 行（-28%）
+- **scripts/update-checksums.ps1**: 同步支持用户 hooks 下载源（ErgeAIA 仓库），移除旧的嵌入内容保留逻辑
+
 ## [1.6.0] - 2026-06-04
 
 ### Added

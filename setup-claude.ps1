@@ -47,11 +47,13 @@ $OutputEncoding           = [System.Text.Encoding]::UTF8
 # ============================================================
 #  常量
 # ============================================================
-$GCS_BUCKET   = 'https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases'
-$REPO_BASE = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
+$GCS_BUCKET    = 'https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases'
+$DISLER_REPO   = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
+$USER_REPO     = 'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/hooks'
 
 # SHA256 checksums（与仓库根目录 checksums.txt 同步）
 $CHECKSUMS = @{
+    # disler hooks
     'pre_tool_use.py'         = '78006866F793CCD394BC52011582CE48707CEEF9D3496E474AB7BCB63365A5DA'
     'post_tool_use.py'        = '6C3F0AA03CABC68670490A7CDAD6FC2364C94B074F9D6E317EA7C8ABE04C9449'
     'session_start.py'        = 'E48E3D8F6D50A14DBBE4635E461C956A55F338D1DCA67ED39CACDBBF336C6DB8'
@@ -59,10 +61,10 @@ $CHECKSUMS = @{
     'post_tool_use_failure.py'= '46BA935B917E7F8EAD0273E968BE09201E51016913F41A6E9E8DB908BE06D822'
     'session_end.py'          = 'F316D341AE6A3A60E3E5A0DDD0DFD3360DA793A31E80B4B7B44C00F755E15426'
     'status_line_v6.py'       = 'B71DEB25E7C2308B1AB134DFE686E4E6A50612AA4FB91C98CA98327B78A19803'
-    # 用户自写 hooks（嵌入在脚本中，离线部署）— 哈希对应嵌入内容（非源文件）
+    # 用户 hooks（从本仓库下载）
     'auto_format.py'          = 'BAF7FA4737BAE65C23D42E24CFCE902881ABC3DE43C24F10DE34A3475D50B2C8'
     'block_dangerous.py'      = '769A7996ECD918B2611EA853330B340F8055AEEE3054B5E1F02650E47913A05F'
-    'check_secrets.py'        = 'AA4127A6DA1052F5CDF61EED1960A12902494ABBD73DC631EC3ACDCE8C55192E'
+    'check_secrets.py'        = 'D16970556CF9A8EE230230E9FD6D18002D091C3239FC5658D460DE444F3F3607'
     'verify_on_stop.py'       = '9E4EF09A78183EDC1833CB4794AA90959DFD32382EAF3BCA14DCF63DFD530ED5'
 }
 
@@ -77,621 +79,21 @@ $BIN_DIR      = Join-Path $env:USERPROFILE '.local\bin'
 $LINK_PATH    = Join-Path $BIN_DIR 'claude.exe'
 $CONFIG_PATH  = Join-Path $env:USERPROFILE '.claude.json'
 
-$DISLER_HOOKS = @(
-    'pre_tool_use.py',
-    'post_tool_use.py',
-    'session_start.py',
-    'user_prompt_submit.py',
-    'post_tool_use_failure.py',
-    'session_end.py'
-)
-$USER_HOOKS = @(
-    'auto_format.py',
-    'block_dangerous.py',
-    'check_secrets.py',
-    'verify_on_stop.py'
-)
+# hooks 来源映射：文件名 → 下载基础 URL
+$HOOK_SOURCES = @{
+    'pre_tool_use.py'         = $DISLER_REPO
+    'post_tool_use.py'        = $DISLER_REPO
+    'session_start.py'        = $DISLER_REPO
+    'user_prompt_submit.py'   = $DISLER_REPO
+    'post_tool_use_failure.py'= $DISLER_REPO
+    'session_end.py'          = $DISLER_REPO
+    'auto_format.py'          = $USER_REPO
+    'block_dangerous.py'      = $USER_REPO
+    'check_secrets.py'        = $USER_REPO
+    'verify_on_stop.py'       = $USER_REPO
+}
 $STATUS_LINE = 'status_line_v6.py'
 
-# ============================================================
-#  用户自写 hooks 内容（嵌入 here-string，离线部署）
-#  修改仓库 hooks/ 目录后需重新计算 SHA256 并更新本节 + $CHECKSUMS
-# ============================================================
-$USER_HOOKS_CONTENT = @{
-    'auto_format.py' = @'
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.8"
-# ///
-from __future__ import annotations
-"""
-Claude 改完文件后按扩展名自动跑 formatter。
-事件: PostToolUse (Write|Edit|MultiEdit)
-策略: 静默执行，任何失败都不阻塞 Claude (exit 0)
-"""
-
-import json
-import shutil
-import subprocess
-import sys
-from pathlib import Path
-
-
-FORMAT_TIMEOUT_S = 30
-
-# (扩展名集合, 候选命令模板列表 — 第一个可用命令胜出, "{path}" 占位符替换为文件路径)
-FORMATTERS: list[tuple[frozenset[str], list[list[str]]]] = [
-    (frozenset({".rs"}), [["rustfmt", "{path}"]]),
-    (frozenset({".ts", ".tsx", ".js", ".jsx", ".json", ".css", ".md",
-                ".vue", ".html", ".yaml", ".yml", ".scss"}),
-     [["prettier", "--write", "{path}"],
-      ["npx", "--no-install", "prettier", "--write", "{path}"]]),
-    (frozenset({".py"}), [["ruff", "format", "{path}"],
-                           ["black", "-q", "{path}"]]),
-    (frozenset({".toml"}), [["taplo", "format", "{path}"]]),
-]
-
-
-def has_command(name: str) -> bool:
-    """检查命令是否在 PATH 中可用"""
-    return shutil.which(name) is not None
-
-
-def run_silent(cmd: list[str], timeout: int = FORMAT_TIMEOUT_S) -> bool:
-    """静默执行命令。
-    Returns:
-        True  = 命令返回 0
-        False = 命令返回非零 / 超时 / 命令不存在
-    """
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            timeout=timeout,
-            check=False,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return False
-
-
-def format_by_extension(path: Path) -> None:
-    """根据扩展名选择 formatter"""
-    ext = path.suffix.lower()
-    for exts, candidates in FORMATTERS:
-        if ext not in exts:
-            continue
-        for tmpl in candidates:
-            cmd = [arg.replace("{path}", str(path)) for arg in tmpl]
-            if has_command(cmd[0]):
-                run_silent(cmd)
-                return
-        return
-
-
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-        tool_input = input_data.get("tool_input", {})
-        file_path = tool_input.get("file_path", "")
-
-        if not file_path:
-            sys.exit(0)
-
-        path = Path(file_path)
-        if not path.exists():
-            sys.exit(0)
-
-        format_by_extension(path)
-
-        sys.exit(0)
-    except json.JSONDecodeError:
-        sys.exit(0)
-    except Exception:
-        sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()
-
-'@
-
-    'block_dangerous.py' = @'
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.8"
-# ///
-from __future__ import annotations
-"""
-拦截红线清单中的高危 bash 命令。
-事件: PreToolUse (Bash)
-策略: 命中红线 exit 2 阻断执行 + JSON output + stderr 反馈给 Claude
-"""
-
-import json
-import re
-import sys
-from typing import NamedTuple
-
-
-class Rule(NamedTuple):
-    pattern: str
-    label: str
-    severity: str   # "critical" / "high" / "medium"
-    why: str        # 一句话解释为什么危险
-
-
-# 红线规则
-DANGEROUS_RULES: list[Rule] = [
-    # === CRITICAL: 不可逆数据丢失 ===
-    Rule(r"\brm\s+-[a-zA-Z]*[rf][a-zA-Z]*[rf]", "rm -rf/fr 类删除", "critical",
-         "递归强制删除，文件不可恢复"),
-    Rule(r"\brm\s+--recursive\s+--force", "rm --recursive --force", "critical",
-         "长选项等价 rm -rf"),
-    Rule(r"\brm\s+--force\s+--recursive", "rm --force --recursive", "critical",
-         "长选项等价 rm -rf"),
-    Rule(r"\brm\s+-rf?\s+[/~]", "rm -rf / 或 ~ 根目录/家目录", "critical",
-         "删除根目录或用户家目录，系统不可恢复"),
-    Rule(r"\brm\s+-rf?\s+\*", "rm -rf * 通配符", "critical",
-         "通配符删除当前目录所有文件"),
-
-    # === PowerShell/Windows 删除 ===
-    Rule(r"Remove-Item\s+.*(-Recurse.*-Force|-Force.*-Recurse)", "PowerShell 递归强删", "critical",
-         "PowerShell 递归强制删除（参数顺序无关）"),
-    Rule(r"\brd\s+/s\s+/q", "cmd rd /s /q", "critical",
-         "cmd 静默递归删除目录"),
-    Rule(r"\brmdir\s+/s\s+/q", "cmd rmdir /s /q", "critical",
-         "cmd 静默递归删除目录"),
-    Rule(r"\bdel\s+/[sf]\s+/[qf]", "cmd del /s /q", "high",
-         "cmd 静默递归删除文件"),
-
-    # === 磁盘 / 格式化 ===
-    Rule(r"Format-Volume", "PowerShell 格式化卷", "critical",
-         "格式化磁盘卷，所有数据丢失"),
-    Rule(r"\bmkfs\.", "mkfs 格式化", "critical",
-         "创建文件系统，等同格式化"),
-    Rule(r"\bformat\s+[a-zA-Z]:", "format C: 格式化分区", "critical",
-         "格式化分区，所有数据丢失"),
-    Rule(r"\bdiskpart\b", "diskpart 磁盘分区工具", "critical",
-         "磁盘分区操作，可导致数据丢失"),
-    Rule(r"\bdd\s+if=", "dd 块写入", "critical",
-         "底层块写入，误操作可覆盖整盘"),
-
-    # === Git 危险操作 ===
-    Rule(r"git\s+push\s+.*--force(?!-with-lease)", "git push --force (无 with-lease)", "medium",
-         "覆盖远端历史，可能影响协作者"),
-    Rule(r"git\s+push\s+\S*\s*-f\b", "git push -f", "medium",
-         "覆盖远端历史，可能影响协作者"),
-    Rule(r"git\s+reset\s+--hard", "git reset --hard", "high",
-         "丢弃未提交修改，工作区不可恢复"),
-    Rule(r"git\s+rebase\s+(-i\s+)?\S", "git rebase 交互", "medium",
-         "重写提交历史，可能导致冲突"),
-    Rule(r"git\s+clean\s+-[a-zA-Z]*f[a-zA-Z]*d", "git clean -fd", "high",
-         "删除未跟踪文件和目录"),
-
-    # === 发布 / 发布工具 ===
-    Rule(r"npm\s+publish\b", "npm publish", "medium",
-         "发布包到 npm 仓库，不可撤回"),
-    Rule(r"cargo\s+publish\b", "cargo publish", "medium",
-         "发布 crate 到 crates.io，不可撤回"),
-    Rule(r"pnpm\s+publish\b", "pnpm publish", "medium",
-         "发布包到 npm 仓库，不可撤回"),
-
-    # === 敏感文件写入 ===
-    Rule(r">\s*\.env\b(?!\.sample|\.example|\.template)", "覆写 .env", "high",
-         "覆盖环境变量文件，可能丢失密钥配置"),
-    Rule(r"Set-Content\s+.*\.env\b(?!\.sample)", "PowerShell 写入 .env", "high",
-         "覆盖环境变量文件"),
-    Rule(r"cat\s+\.env\b(?!\.sample|\.example)", "cat .env", "medium",
-         "读取环境变量文件，可能泄露密钥"),
-
-    # === 数据库 ===
-    Rule(r"\bDROP\s+(TABLE|DATABASE|SCHEMA)\b", "SQL DROP", "critical",
-         "删除数据库表/库，数据不可恢复"),
-    Rule(r"\bTRUNCATE\s+TABLE\b", "SQL TRUNCATE", "high",
-         "清空表数据，不可恢复"),
-
-    # === 系统级 ===
-    Rule(r"\bshutdown\s+/[srh]", "Windows shutdown", "critical",
-         "关闭/重启 Windows 系统"),
-    Rule(r"\bshutdown\s+-[rh]", "Unix shutdown", "critical",
-         "关闭/重启 Unix 系统"),
-    Rule(r"\bsudo\s+rm\b", "sudo rm", "critical",
-         "以 root 权限删除文件"),
-    Rule(r"\bchmod\s+-R\s+777", "chmod -R 777 危险权限", "high",
-         "递归设置全开放权限，安全风险"),
-
-    # === Pipe to shell ===
-    Rule(r"curl\s+[^|]+\|\s*(sh|bash|zsh|pwsh)", "curl | sh", "critical",
-         "从网络下载脚本直接执行，供应链攻击风险"),
-    Rule(r"wget\s+[^|]+\|\s*(sh|bash|zsh|pwsh)", "wget | sh", "critical",
-         "从网络下载脚本直接执行，供应链攻击风险"),
-]
-
-# 模块加载时预编译正则
-_COMPILED_RULES: list[tuple[re.Pattern, Rule]] = [
-    (re.compile(r.pattern, re.IGNORECASE), r) for r in DANGEROUS_RULES
-]
-
-
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-        tool_name = input_data.get("tool_name", "")
-
-        # 只检查 Bash 工具
-        if tool_name != "Bash":
-            sys.exit(0)
-
-        command = input_data.get("tool_input", {}).get("command", "")
-        if not command:
-            sys.exit(0)
-
-        # 逐条匹配（预编译正则）
-        for compiled, rule in _COMPILED_RULES:
-            if compiled.search(command):
-                # 截断命令显示
-                display = command[:300]
-                if len(command) > 300:
-                    display += f"... (总 {len(command)} 字符)"
-
-                # JSON output（与其他 hook 对齐）
-                output = {
-                    "decision": "block",
-                    "reason": (
-                        f"命中红线命令 [{rule.severity}]: {rule.label}\n"
-                        f"  原因: {rule.why}\n"
-                        f"  命令: {display}\n"
-                        f"  如确需执行,请手动在终端运行。"
-                    ),
-                }
-                print(json.dumps(output, ensure_ascii=False))
-
-                # 同时输出到 stderr
-                print("BLOCKED: 命中红线命令", file=sys.stderr)
-                print(f"  级别: {rule.severity}", file=sys.stderr)
-                print(f"  规则: {rule.label}", file=sys.stderr)
-                print(f"  原因: {rule.why}", file=sys.stderr)
-                print(f"  命令: {display}", file=sys.stderr)
-                print("  如确需执行,请手动在终端运行。", file=sys.stderr)
-
-                sys.exit(2)  # exit 2 阻断 PreToolUse 并反馈 Claude
-
-        sys.exit(0)
-    except json.JSONDecodeError:
-        sys.exit(0)
-    except Exception:
-        sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()
-
-'@
-
-    'check_secrets.py' = @'
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.8"
-# ///
-from __future__ import annotations
-"""
-检测 Claude 写入文件时是否包含密钥。
-事件: PostToolUse (Write|Edit|MultiEdit) - 注意 PostToolUse 不可阻塞
-策略: 写入已完成,通过 hookSpecificOutput.additionalContext 注入上下文,
-      让 Claude 下一轮主动修复(避免使用 decision=block 在 PostToolUse 阶段的语义歧义)
-"""
-
-import json
-import re
-import sys
-
-
-# 高置信度密钥模式（大小写敏感匹配，降低误报）
-SECRET_PATTERNS: list[tuple[str, str]] = [
-    # OpenAI
-    (r"sk-proj-[a-zA-Z0-9\-_]{20,}", "OpenAI Project Key"),
-    (r"sk-(?!proj-|ant-)[a-zA-Z0-9]{20,}", "OpenAI API Key"),
-    # Anthropic
-    (r"sk-ant-[a-zA-Z0-9\-_]{20,}", "Anthropic API Key"),
-    # GitHub
-    (r"github_pat_[a-zA-Z0-9_]{80,}", "GitHub fine-grained PAT"),
-    (r"ghp_[a-zA-Z0-9]{36}", "GitHub Personal Access Token"),
-    (r"gho_[a-zA-Z0-9]{36}", "GitHub OAuth Token"),
-    (r"ghs_[a-zA-Z0-9]{36}", "GitHub Server Token"),
-    (r"ghr_[a-zA-Z0-9]{36}", "GitHub Refresh Token"),
-    # AWS
-    (r"AKIA[0-9A-Z]{16}", "AWS Access Key ID"),
-    (r"ASIA[0-9A-Z]{16}", "AWS Session Key"),
-    # Google
-    (r"AIza[0-9A-Za-z_\-]{35}", "Google API Key"),
-    # Slack
-    (r"xox[baprs]-[0-9a-zA-Z\-]{10,}", "Slack Token"),
-    # Stripe
-    (r"sk_live_[0-9a-zA-Z]{24,}", "Stripe Live Key"),
-    # PEM 私钥
-    (r"-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----", "Private Key (PEM)"),
-]
-
-# 模块加载时预编译正则
-_COMPILED_PATTERNS: list[tuple[re.Pattern, str]] = [
-    (re.compile(p), label) for p, label in SECRET_PATTERNS
-]
-
-# 路径段精确匹配（目录名，避免 "test_utils.py" 误命中 "test"）
-_SKIP_PATH_SEGMENTS = {
-    "tests", "test", "__tests__", "spec", "specs",
-    "fixtures", "mocks", "examples", "samples", "testdata",
-    "docs", "documentation",
-}
-
-# 文件后缀精确匹配
-_SKIP_SUFFIXES = {".env.sample", ".env.example", ".env.template", ".env.dist"}
-
-
-def is_false_positive(file_path: str) -> bool:
-    """排除示例/测试文件（路径段精确匹配，避免误报）"""
-    norm = file_path.replace("\\", "/").lower()
-    # 后缀精确匹配
-    for suf in _SKIP_SUFFIXES:
-        if norm.endswith(suf):
-            return True
-    # 路径段精确匹配
-    parts = set(norm.split("/"))
-    return bool(parts & _SKIP_PATH_SEGMENTS)
-
-
-def extract_content(tool_input: dict) -> str:
-    """从 tool_input 提取写入内容 (Write/Edit/MultiEdit 字段不同)"""
-    # Write 用 content
-    if "content" in tool_input and tool_input["content"]:
-        return tool_input["content"]
-    # Edit 用 new_string
-    if "new_string" in tool_input and tool_input["new_string"]:
-        return tool_input["new_string"]
-    # MultiEdit 用 edits 数组
-    if "edits" in tool_input:
-        parts = [e.get("new_string", "") for e in tool_input.get("edits", [])]
-        return "\n".join(p for p in parts if p)
-    return ""
-
-
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-        tool_input = input_data.get("tool_input", {})
-        file_path = tool_input.get("file_path", "")
-
-        if is_false_positive(file_path):
-            sys.exit(0)
-
-        content = extract_content(tool_input)
-        if not content:
-            sys.exit(0)
-
-        # 扫描所有模式（预编译正则）
-        hits = []
-        for compiled, label in _COMPILED_PATTERNS:
-            for match in compiled.finditer(content):
-                # 显示行号 + 长度，不输出密钥片段
-                line_num = content[: match.start()].count("\n") + 1
-                snippet = f"<line {line_num}, {len(match.group(0))} chars>"
-                hits.append(f"{label}: {snippet}")
-
-        if not hits:
-            sys.exit(0)
-
-        # PostToolUse 不可阻塞写入,通过 hookSpecificOutput.additionalContext
-        # 把警告注入到 Claude 上下文,让 Claude 在下一轮主动修复
-        # (decision=block 在 PostToolUse 阶段语义不准:写入已完成,无法"阻止")
-        reason = (
-            f"SECURITY: Possible secret(s) detected in {file_path}:\n"
-            + "\n".join(f"  - {h}" for h in hits)
-            + "\nImmediate action: remove the value, move to .env (gitignored), "
-            "or use environment variables. Then re-edit the file."
-        )
-
-        output = {
-            "hookSpecificOutput": {
-                "hookEventName": "PostToolUse",
-                "additionalContext": reason,
-            }
-        }
-        print(json.dumps(output, ensure_ascii=False))
-
-        # 同时输出到 stderr 让用户看到
-        print(
-            f"[check-secrets] {len(hits)} secret pattern(s) hit in {file_path}",
-            file=sys.stderr,
-        )
-        for h in hits:
-            print(f"  - {h}", file=sys.stderr)
-
-        sys.exit(0)
-    except json.JSONDecodeError:
-        sys.exit(0)
-    except Exception:
-        sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()
-
-'@
-
-    'verify_on_stop.py' = @'
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.8"
-# ///
-from __future__ import annotations
-"""
-Claude 说"完成"前轻量验证项目状态。
-事件: Stop
-策略: 仅在 git 仓库内运行；命中失败用 JSON decision=block 阻止结束
-注意: 检查 stop_hook_active 避免无限循环
-"""
-
-import json
-import os
-import shutil
-import subprocess
-import sys
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Callable
-
-
-# 可通过环境变量跳过指定 checker（逗号分隔），如 VERIFY_ON_STOP_SKIP=rust,typescript
-_SKIP_CHECKERS = set(
-    os.environ.get("VERIFY_ON_STOP_SKIP", "").lower().split(",")
-) - {""}
-
-
-def has_command(name: str) -> bool:
-    return shutil.which(name) is not None
-
-
-def run_quiet(cmd: list[str], timeout: int = 60) -> int | None:
-    """运行命令。
-    Returns:
-        exit code (0-255) — 命令正常结束
-        None — 超时 / 命令不存在 / 系统错误
-    """
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            timeout=timeout,
-            check=False,
-        )
-        return result.returncode
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return None
-
-
-def is_git_repo() -> bool:
-    return run_quiet(["git", "rev-parse", "--git-dir"], timeout=5) == 0
-
-
-# TypeScript 包管理器候选链（lockfile → runner 命令）
-_TS_RUNNERS: list[tuple[str, list[str]]] = [
-    ("pnpm-lock.yaml", ["pnpm", "exec", "tsc", "--noEmit"]),
-    ("bun.lockb", ["bun", "x", "tsc", "--noEmit"]),
-    ("bun.lock", ["bun", "x", "tsc", "--noEmit"]),
-    ("yarn.lock", ["yarn", "run", "tsc", "--noEmit"]),
-    ("package-lock.json", ["npx", "--no-install", "tsc", "--noEmit"]),
-]
-
-
-def _pick_ts_runner() -> list[str] | None:
-    """根据 lockfile 选择 TypeScript runner"""
-    for lockfile, cmd in _TS_RUNNERS:
-        if Path(lockfile).exists() and has_command(cmd[0]):
-            return cmd
-    # 没找到 lockfile 但有 npx — 仍可跑
-    if has_command("npx"):
-        return ["npx", "--no-install", "tsc", "--noEmit"]
-    return None
-
-
-@dataclass
-class Checker:
-    name: str
-    label: str
-    markers: list[str]          # 任一存在即触发
-    cmd: list[str] | None = None
-    timeout: int = 60
-    pick_cmd: Callable[[], list[str] | None] | None = None
-
-
-# 按超时升序排列 — 短任务先跑
-CHECKERS: list[Checker] = [
-    Checker("python", "Python: ruff check 未通过",
-            markers=["pyproject.toml", "setup.py"],
-            cmd=["ruff", "check", ".", "--quiet"], timeout=30),
-    Checker("typescript", "TypeScript: tsc --noEmit 未通过",
-            markers=["tsconfig.json"],
-            pick_cmd=_pick_ts_runner, timeout=90),
-    Checker("rust", "Rust: cargo check 未通过",
-            markers=["Cargo.toml"],
-            cmd=["cargo", "check", "--quiet"], timeout=90),
-]
-
-
-def run_checker(c: Checker) -> str | None:
-    """运行单个 checker，失败返回 label，通过返回 None"""
-    if c.name in _SKIP_CHECKERS:
-        return None
-    if not any(Path(m).exists() for m in c.markers):
-        return None
-    cmd = c.pick_cmd() if c.pick_cmd else c.cmd
-    if not cmd or not has_command(cmd[0]):
-        return None
-    if run_quiet(cmd, timeout=c.timeout) != 0:
-        return c.label
-    return None
-
-
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-        stop_hook_active = input_data.get("stop_hook_active", False)
-
-        # 防止无限循环: 上轮 Stop hook 已经触发过验证,本轮直接放行
-        if stop_hook_active:
-            sys.exit(0)
-
-        # 不在 git 仓库内则跳过
-        if not is_git_repo():
-            sys.exit(0)
-
-        issues: list[str] = []
-
-        # 并行执行 checker — 三个 checker 串行最坏 30+90+90=210s 阻塞 Stop 事件
-        # 改为并发后最坏 max(30,90,90)=90s；subprocess 阻塞期间释放 GIL
-        # 保持 CHECKERS 顺序输出,便于用户/日志稳定解析
-        with ThreadPoolExecutor(max_workers=len(CHECKERS)) as pool:
-            future_to_checker = {pool.submit(run_checker, c): c for c in CHECKERS}
-            for fut, checker in future_to_checker.items():
-                try:
-                    result = fut.result()
-                    if result:
-                        issues.append(result)
-                except Exception:
-                    pass  # checker 崩溃不影响其他 checker
-
-        if not issues:
-            sys.exit(0)
-
-        # 用 JSON 输出阻止 Claude 结束 + 给出可读 reason
-        reason = (
-            "完成前发现未通过的验证,请先修复:\n"
-            + "\n".join(f"  - {i}" for i in issues)
-        )
-        output = {
-            "decision": "block",
-            "reason": reason,
-        }
-        print(json.dumps(output, ensure_ascii=False))
-
-        # 同时输出到 stderr 给用户看
-        print("[verify-on-stop] 验证未通过:", file=sys.stderr)
-        for i in issues:
-            print(f"  - {i}", file=sys.stderr)
-
-        sys.exit(0)
-    except json.JSONDecodeError:
-        sys.exit(0)
-    except Exception:
-        sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()
-
-'@
 }
 
 # ============================================================
@@ -1173,49 +575,6 @@ function Install-ClaudeCode {
 
     # 统一做 PATH 处理（无论哪种方式都跑）
     Ensure-ClaudeOnPath -InstallMethod $succeeded | Out-Null
-}
-
-# ============================================================
-#  阶段 3：用户自写 hooks 部署（从嵌入内容写入，离线可用）
-# ============================================================
-function Install-UserHooks {
-    Write-Step '部署用户自写 hooks（来自仓库嵌入内容）'
-
-    New-Item -ItemType Directory -Force -Path $HOOK_DIR | Out-Null
-    Write-Info "  hooks 目录：$HOOK_DIR"
-
-    foreach ($f in $USER_HOOKS) {
-        $dest = Join-Path $HOOK_DIR $f
-        if (Test-Path $dest) {
-            Write-Info "    [SKIP] $f（已存在，不覆盖）"
-            continue
-        }
-        if (-not $USER_HOOKS_CONTENT.ContainsKey($f)) {
-            Write-Warn2 "    [SKIP] $f（嵌入内容缺失）"
-            continue
-        }
-        Write-Info "    [WRITE] $f"
-        try {
-            $content = $USER_HOOKS_CONTENT[$f]
-            # 用 UTF-8 无 BOM 写入（跨 PS 5.1/7+ 一致），保证 SHA256 跨平台一致
-            $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-            [System.IO.File]::WriteAllText($dest, $content, $utf8NoBom)
-            # SHA256 校验
-            if ($CHECKSUMS.ContainsKey($f)) {
-                $actual = (Get-FileHash -Path $dest -Algorithm SHA256).Hash.ToUpper()
-                $expected = $CHECKSUMS[$f].ToUpper()
-                if ($actual -ne $expected) {
-                    Remove-Item $dest -Force -ErrorAction SilentlyContinue
-                    throw "SHA256 mismatch: expected $expected, got $actual"
-                }
-                Write-Ok "    $f (SHA256 verified)"
-            } else {
-                Write-Warn2 "    $f (no checksum - skip verification)"
-            }
-        } catch {
-            Write-Err "    $f 写入失败：$_"
-        }
-    }
 }
 
 # ============================================================
@@ -1702,8 +1061,10 @@ function Install-Hooks {
     New-Item -ItemType Directory -Force -Path $HOOK_DIR, $SL_DIR, $LOG_DIR | Out-Null
     Write-Ok "目录就绪：$CLAUDE_HOME"
 
-    Write-Info '  下载 disler 仓库的 6 个 hooks:'
-    foreach ($f in $DISLER_HOOKS) {
+    Write-Info "  下载 hooks（$($HOOK_SOURCES.Count) 个）:"
+    foreach ($entry in $HOOK_SOURCES.GetEnumerator()) {
+        $f = $entry.Key
+        $base = $entry.Value
         $dest = Join-Path $HOOK_DIR $f
         if (Test-Path $dest) {
             Write-Info "    [SKIP] $f（已存在）"
@@ -1711,7 +1072,7 @@ function Install-Hooks {
         }
         Write-Info "    [GET ] $f"
         try {
-            $url = "$REPO_BASE/hooks/$f"
+            $url = "$base/$f"
             Invoke-DownloadFile -Url $url -Dest $dest
             # SHA256 校验
             if ($CHECKSUMS.ContainsKey($f)) {
@@ -1736,7 +1097,7 @@ function Install-Hooks {
     } else {
         Write-Info "  [GET ] $STATUS_LINE"
         try {
-            $slUrl = "$REPO_BASE/status_lines/$STATUS_LINE"
+            $slUrl = "$DISLER_REPO/status_lines/$STATUS_LINE"
             Invoke-DownloadFile -Url $slUrl -Dest $slDest
             # SHA256 校验
             if ($CHECKSUMS.ContainsKey($STATUS_LINE)) {
@@ -1875,7 +1236,6 @@ try {
             exit 0
         }
 
-        Install-UserHooks
         Install-Hooks
         Install-ClaudeJson
         Install-SettingsJson -Strategy $settingsStrategy

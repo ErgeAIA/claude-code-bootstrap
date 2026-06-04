@@ -18,17 +18,23 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$REPO_BASE = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
-$ROOT_DIR  = Split-Path $PSScriptRoot -Parent
+$DISLER_REPO = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
+$USER_REPO   = 'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main'
+$ROOT_DIR    = Split-Path $PSScriptRoot -Parent
 
-$FILES = @{
-    'hooks/pre_tool_use.py'         = 'pre_tool_use.py'
-    'hooks/post_tool_use.py'        = 'post_tool_use.py'
-    'hooks/session_start.py'        = 'session_start.py'
-    'hooks/user_prompt_submit.py'   = 'user_prompt_submit.py'
-    'hooks/post_tool_use_failure.py'= 'post_tool_use_failure.py'
-    'hooks/session_end.py'          = 'session_end.py'
-    'status_lines/status_line_v6.py'= 'status_line_v6.py'
+# 来源映射：本地路径 → (远程 URL, 文件名)
+$FILES = [ordered]@{
+    'hooks/pre_tool_use.py'         = @{ Url = "$DISLER_REPO/hooks/pre_tool_use.py";         Name = 'pre_tool_use.py' }
+    'hooks/post_tool_use.py'        = @{ Url = "$DISLER_REPO/hooks/post_tool_use.py";        Name = 'post_tool_use.py' }
+    'hooks/session_start.py'        = @{ Url = "$DISLER_REPO/hooks/session_start.py";        Name = 'session_start.py' }
+    'hooks/user_prompt_submit.py'   = @{ Url = "$DISLER_REPO/hooks/user_prompt_submit.py";   Name = 'user_prompt_submit.py' }
+    'hooks/post_tool_use_failure.py'= @{ Url = "$DISLER_REPO/hooks/post_tool_use_failure.py";Name = 'post_tool_use_failure.py' }
+    'hooks/session_end.py'          = @{ Url = "$DISLER_REPO/hooks/session_end.py";          Name = 'session_end.py' }
+    'status_lines/status_line_v6.py'= @{ Url = "$DISLER_REPO/status_lines/status_line_v6.py";Name = 'status_line_v6.py' }
+    'hooks/auto_format.py'          = @{ Url = "$USER_REPO/hooks/auto_format.py";            Name = 'auto_format.py' }
+    'hooks/block_dangerous.py'      = @{ Url = "$USER_REPO/hooks/block_dangerous.py";        Name = 'block_dangerous.py' }
+    'hooks/check_secrets.py'        = @{ Url = "$USER_REPO/hooks/check_secrets.py";          Name = 'check_secrets.py' }
+    'hooks/verify_on_stop.py'       = @{ Url = "$USER_REPO/hooks/verify_on_stop.py";         Name = 'verify_on_stop.py' }
 }
 
 # ============================================================
@@ -39,19 +45,19 @@ Write-Host '  刷新 hooks 校验和' -ForegroundColor Cyan
 Write-Host '  ==================' -ForegroundColor Cyan
 
 $newChecksums = [ordered]@{}
-foreach ($entry in $FILES.GetEnumerator() | Sort-Object Key) {
-    $tmpFile = Join-Path $env:TEMP $entry.Value
-    $url = "$REPO_BASE/$($entry.Key)"
-    Write-Host "  [GET] $($entry.Value)..." -ForegroundColor Gray -NoNewline
+foreach ($entry in $FILES.GetEnumerator()) {
+    $info = $entry.Value
+    $tmpFile = Join-Path $env:TEMP $info.Name
+    Write-Host "  [GET] $($info.Name)..." -ForegroundColor Gray -NoNewline
     try {
-        Invoke-WebRequest -Uri $url -OutFile $tmpFile -TimeoutSec 30 -ErrorAction Stop
+        Invoke-WebRequest -Uri $info.Url -OutFile $tmpFile -TimeoutSec 30 -ErrorAction Stop
     } catch {
-        Write-Host "`r  [ERR] $($entry.Value): download failed" -ForegroundColor Red
-        throw "Failed to download $($entry.Value): $_"
+        Write-Host "`r  [ERR] $($info.Name): download failed" -ForegroundColor Red
+        throw "Failed to download $($info.Name): $_"
     }
     $hash = (Get-FileHash -Path $tmpFile -Algorithm SHA256).Hash.ToUpper()
-    $newChecksums[$entry.Value] = $hash
-    Write-Host "`r  [OK]  $($entry.Value): $hash" -ForegroundColor Green
+    $newChecksums[$info.Name] = $hash
+    Write-Host "`r  [OK]  $($info.Name): $hash" -ForegroundColor Green
     Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
 }
 
@@ -97,7 +103,8 @@ if ($DryRun) {
 # ============================================================
 $lines = @(
     '# SHA256 checksums for downloaded hooks and status_line',
-    '# Generated from disler/claude-code-hooks-mastery repository',
+    '# Disler hooks: disler/claude-code-hooks-mastery',
+    '# User hooks: ErgeAIA/claude-code-bootstrap/hooks/',
     '# Verify with: Get-FileHash -Algorithm SHA256 <file> | Select-Object -ExpandProperty Hash'
 )
 foreach ($entry in $newChecksums.GetEnumerator()) {
@@ -119,17 +126,6 @@ $checksumsBlock = "@{`n"
 foreach ($entry in $newChecksums.GetEnumerator()) {
     $padding = if ($entry.Key.Length -lt 24) { ' ' * (24 - $entry.Key.Length) } else { '' }
     $checksumsBlock += "    '$($entry.Key)'$padding= '$($entry.Value)'`n"
-}
-# 保留用户自写 hooks 校验和（从现有 $CHECKSUMS 中提取，避免被覆盖）
-$userHookFiles = @('auto_format.py', 'block_dangerous.py', 'check_secrets.py', 'verify_on_stop.py')
-if ($setupContent -match '(?s)\$CHECKSUMS\s*=\s*@\{.*?\}') {
-    $existingBlock = $Matches[0]
-    foreach ($uf in $userHookFiles) {
-        if ($existingBlock -match "'$uf'\s*=\s*'([A-F0-9]{64})'") {
-            $padding = if ($uf.Length -lt 24) { ' ' * (24 - $uf.Length) } else { '' }
-            $checksumsBlock += "    '$uf'$padding= '$($Matches[1])'`n"
-        }
-    }
 }
 $checksumsBlock += "}"
 

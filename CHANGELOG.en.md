@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **setup-claude.ps1**: User hooks changed from embedded script content to repository download, unified with disler hooks; script size reduced from 73KB / 1897 lines to 52KB / 1257 lines (-28%)
+- **scripts/update-checksums.ps1**: Added user hooks download source (ErgeAIA repo), removed legacy embedded content preservation logic
+
 ## [1.6.0] - 2026-06-04
 
 ### Added
