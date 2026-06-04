@@ -22,7 +22,7 @@ claude-code-bootstrap/
 │   ├── check_secrets.py     # 检查是否泄露密钥
 │   └── verify_on_stop.py    # 会话结束时验证
 ├── scripts/                 # 维护脚本
-│   ├── refresh-user-hook-hash.ps1 # 刷新用户 hooks 嵌入内容的 SHA256（UTF-8 无 BOM，与部署时一致）
+│   ├── refresh-user-hook-hash.ps1 # 刷新用户 hooks SHA256（已废弃，hooks 改为下载后不再需要嵌入哈希）
 │   └── update-checksums.ps1 # 刷新 hooks SHA256 校验和（支持 -DryRun）
 ├── .github/
 │   └── workflows/
@@ -35,10 +35,10 @@ claude-code-bootstrap/
 
 ### 安装流程（setup-claude.ps1）
 
-1. **安装模式选择**：交互式选择 Minimal（仅软件，默认）或 Full（软件 + hooks）
+1. **环境检测**：PowerShell 5.1+、64 位系统、Git、UV（自动安装）、Node.js、Claude Code；输出表格报告（通过/建议/可选/阻断）
+2. **安装模式选择**：交互式选择 0（退出）/ 1（仅软件，默认）/ 2（完整安装含 hooks）
    - 可通过 `-InstallMode Minimal|Full` 参数跳过交互
    - `-SkipClaudeInstall` 仅部署 hooks（配合 Full 模式补装）
-2. **前置检测**：PowerShell 5.1+、64 位系统、Git、UV（自动安装）；Node.js 仅 npm 兜底时自动安装
 3. **现有配置检测**：`Test-ExistingConfig` 报告 settings.json / .claude.json / hooks / status_lines 是否已存在
 4. **Claude Code 安装**（三级兜底）：
    - native（GCS 直连）→ winget → npm
@@ -48,9 +48,9 @@ claude-code-bootstrap/
 6. **自动备份**（仅 Full 模式）：`Backup-SettingsJson` 在写入 settings.json 前备份到 `~/.claude/backups/settings.json.<timestamp>.bak`，保留最近 10 个
 7. **策略选择**（仅 Full 模式）：`Read-SettingsJsonStrategy` 检测到 settings.json 已存在时交互选择，覆盖 / 合并 / 跳过 / 取消（取消则 exit 0）
 8. **Hooks 部署**（仅 Full 模式）：
-   - **用户自写 hooks**（4 个）从 `setup-claude.ps1` 的 `$USER_HOOKS_CONTENT` 嵌入内容写入，离线可用；已存在的 hooks 跳过不覆盖（`Test-Path` 跳过）
-   - **disler 仓库 hooks**（6 个）+ status_line_v6 联网下载（GitHub 单源），下载后 SHA256 校验
-   - 下载/写入后 SHA256 校验，不匹配则删除文件并报错
+   - 10 个 hooks（4 个本仓库 + 6 个 disler）+ status_line_v6 全部从 GitHub 下载
+   - 已存在的 hooks 跳过不覆盖（`Test-Path` 跳过）
+   - 下载后 SHA256 校验，不匹配则删除文件并报错
    - 校验和维护在 `checksums.txt` 和 `$CHECKSUMS` 哈希表中
 9. **settings.json 生成**（仅 Full 模式）：根据策略 `Install-SettingsJson -Strategy <fresh|overwrite|merge|skip>` 写入 `~/.claude/settings.json`
    - `merge` 策略调用 `Merge-Hooks` / `Merge-Permissions` 实现深度合并：
@@ -90,25 +90,24 @@ claude-code-bootstrap/
 
 ### 编码规范（防乱码）
 
-**根因教训：** setup-claude.ps1 中的中文 here-string 曾因多重编码转换（UTF-8 → GBK 误读 → UTF-8 → GBK 误读 → UTF-8）导致所有中文变成乱码（mojibake），且嵌入内容哈希与源文件不一致，部署时 SHA256 校验失败。
+**根因教训：** 中文 Windows 上 PowerShell 5.1 默认使用 GBK 编码，处理 UTF-8 文件会导致乱码（mojibake）。
 
 **强制规则：**
 - 所有项目文件（.ps1 / .py / .json / .md）必须以 **UTF-8 无 BOM** 保存
 - 修改 .ps1 文件时，必须用 `[System.IO.File]::ReadAllText($path, $utf8NoBom)` 读取，`[System.IO.File]::WriteAllText($path, $content, $utf8NoBom)` 写入
 - 禁止使用 PowerShell 5.1 的 `Get-Content` / `Set-Content` / `Out-File` 处理含中文的文件（这些 cmdlet 在中文 Windows 上默认使用 GBK 编码）
-- 嵌入 here-string 内容时，必须从源文件用 `[IO.File]::ReadAllText]` 读取后注入，禁止手动复制粘贴（剪贴板编码转换会损坏中文）
-- 修改用户 hooks 后必须运行 `scripts/refresh-user-hook-hash.ps1 -HookName <file>` 验证嵌入内容与源文件一致
 - Git 配置建议（手动设置，非强制）：`core.quotepath=false`（避免中文文件名显示为八进制转义）
 
 ### Hooks 规范
 - 所有 hooks 用 `uv run --script` 执行（零依赖管理）
-- disler 仓库的 hooks 通过脚本自动下载，**不提交到本仓库**
-- 用户自写的 hooks 放在 `hooks/` 目录，**源文件提交到本仓库 + 嵌入到 `setup-claude.ps1` 的 `$USER_HOOKS_CONTENT`**
+- 所有 hooks（含用户自写和 disler）均从 GitHub 仓库下载，**不嵌入脚本**
+- 用户自写的 hooks 放在 `hooks/` 目录，**源文件提交到本仓库**
+- disler 仓库的 hooks **不提交到本仓库**，从 disler/claude-code-hooks-mastery 下载
 - 修改用户 hooks 后必须同时更新：
   1. `hooks/<file>.py` 源文件
-  2. `setup-claude.ps1` 中的 `$USER_HOOKS_CONTENT` 嵌入块
-  3. `setup-claude.ps1` 中的 `$CHECKSUMS` 哈希值（用 `[IO.File]::WriteAllText` UTF-8 无 BOM 写入后计算）
-  4. `checksums.txt` 文件
+  2. `checksums.txt` 中对应哈希值
+  3. `setup-claude.ps1` 中 `$CHECKSUMS` 对应条目
+  4. 运行 `scripts/update-checksums.ps1` 可自动刷新 2+3
 - 每个 hook 有独立超时设置（10-120 秒）
 - hooks 下载后必须通过 SHA256 校验，校验值维护在 `checksums.txt` 和 `$CHECKSUMS` 中
 - 上游 disler hooks 更新时，运行 `scripts/update-checksums.ps1` 刷新校验和
@@ -142,7 +141,7 @@ claude-code-bootstrap/
    - 纯内部重构（不影响用户）：可跳过 README
 3. **运行复审检查**
    - PowerShell 脚本：用 `Parser::ParseFile` 做语法检查，确保 0 errors
-   - 嵌入 hooks 哈希：用 `refresh-user-hook-hash.ps1` 验证嵌入内容与源文件一致
+   - hooks 哈希：修改 hooks 后运行 `scripts/update-checksums.ps1` 刷新校验和
    - 乱码检查：用 `Select-String` 搜索典型乱码字符（`閸` `鐎` 等）
 4. **生成 commit 信息**
    - 格式：`type(scope): subject`（conventional commit）
@@ -155,7 +154,7 @@ claude-code-bootstrap/
 - 改完代码直接 commit，没更新 CHANGELOG
 - 改了安装流程但没同步 README 的"快速开始"和"高级用法"
 - 推送了 GitHub 忘了 Gitee（违反双平台同步约定）
-- 嵌入 hooks 改了但没跑 `refresh-user-hook-hash.ps1`，部署时 SHA256 校验失败
+- hooks 改了但没更新 `checksums.txt` 和 `$CHECKSUMS`，部署时 SHA256 校验失败
 
 ## 注意事项
 

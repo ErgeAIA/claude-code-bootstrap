@@ -28,7 +28,7 @@
 
 ## 🚀 快速开始
 
-**打开 PowerShell**（无需手动以管理员身份运行，脚本会自动 UAC 提升），执行：
+**打开 PowerShell**，执行：
 
 ```powershell
 iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 | iex
@@ -43,13 +43,13 @@ iwr https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1 | iex
 脚本会自动：
 1. 测速选择最快镜像源
 2. 下载主脚本 `setup-claude.ps1`
-3. **选择安装模式**（默认仅安装软件，可选完整安装含 hooks）
-4. 检测 PowerShell、Git、UV（缺啥补啥）
+3. **环境检测**（PowerShell、Git、UV、Node.js、Claude Code）并输出报告
+4. **选择安装模式**（默认仅安装软件，可选完整安装含 hooks）
 5. 三级兜底安装 Claude Code（native → winget → npm）
 6. 自动配置 PATH（立即生效）
 7. 完整模式下：
-   - 写入 4 个用户自写 hooks（来自仓库嵌入内容）
-   - 下载 6 个 disler 仓库 hooks + status_line_v6
+   - 下载 10 个 hooks（4 个本仓库 + 6 个 disler）+ status_line_v6
+   - 全部 SHA256 校验
    - **自动生成 `~/.claude/settings.json` 启用所有 hooks**
 8. 验证安装结果
 
@@ -62,20 +62,20 @@ flowchart TD
     A[开始] --> B[选择镜像源]
     B --> C[Gitee / GitHub]
     C --> D[下载 setup-claude.ps1]
-    D --> E{选择安装模式}
-    E -->|1. Minimal| F[环境检测]
-    E -->|2. Full| G[环境检测]
-    F --> H[Claude Code 安装\n三级兜底: native → winget → npm]
-    G --> H
-    H --> I[PATH 维护]
+    D --> E[环境检测\n输出报告]
+    E --> F{选择安装模式}
+    F -->|0. 退出| Z[退出]
+    F -->|1. Minimal| G[Claude Code 安装\n三级兜底: native → winget → npm]
+    F -->|2. Full| H[Claude Code 安装]
+    G --> I[PATH 维护]
+    H --> I
     I --> J{InstallMode?}
     J -->|Minimal| K[✅ 完成\n仅安装软件]
-    J -->|Full| L[写入 4 个用户 hooks\n嵌入式内容 + SHA256]
-    L --> M[下载 6 个 disler hooks\n+ status_line_v6]
-    M --> N[生成 ~/.claude/settings.json\n启用所有 hooks + permissions]
-    N --> O[✅ 完成\n软件 + hooks 立即生效]
+    J -->|Full| L[下载 10 个 hooks + status_line\nSHA256 校验]
+    L --> M[生成 ~/.claude/settings.json\n启用所有 hooks + permissions]
+    M --> N[✅ 完成\n软件 + hooks 立即生效]
     K --> P[后续可补装 hooks:\nInstallMode Full -SkipClaudeInstall]
-    O --> P
+    N --> P
 ```
 
 ## ✨ 功能特性
@@ -120,8 +120,8 @@ flowchart TD
 
 > 仅安装模式（默认）不会创建上述目录，仅安装 Claude Code 本体。
 >
-> `[ErgeAIA]` hooks 来自本仓库 `hooks/` 目录，**安装时由 setup-claude.ps1 嵌入内容自动写入**。
-> `[disler]` hooks 来自 disler/claude-code-hooks-mastery 仓库，安装时联网下载 + SHA256 校验。
+> 所有 hooks（含 `[ErgeAIA]` 和 `[disler]`）均从 GitHub 仓库下载 + SHA256 校验。
+> `[ErgeAIA]` 源自本仓库 `hooks/` 目录，`[disler]` 源自 disler/claude-code-hooks-mastery。
 
 ## ⚙️ 高级用法
 
@@ -131,8 +131,9 @@ flowchart TD
 
 | 选项  | 模式                       | 说明                                             |
 | ----- | -------------------------- | ------------------------------------------------ |
+| **0** | 退出安装                   | 退出脚本                                         |
 | **1** | 仅安装 Claude Code（默认） | 安装本体 + PATH 配置，不下载 hooks               |
-| **2** | 完整安装                   | 安装本体 + 从第三方仓库下载 hooks 和 status_line |
+| **2** | 完整安装                   | 安装本体 + 下载 10 个 hooks 和 status_line       |
 
 也可以通过参数直接指定，跳过交互：
 
@@ -249,7 +250,7 @@ claude-code-bootstrap/
 ├── checksums.txt            # hooks 和 status_line 的 SHA256 哈希值
 ├── scripts/
 │   └── update-checksums.ps1 # 刷新 hooks SHA256 哈希值（支持 -DryRun 预览）
-├── hooks/                   # 用户自写 hooks 源（4 个，提交到仓库 + 嵌入到 setup-claude.ps1）
+├── hooks/                   # 用户自写 hooks 源（4 个，安装时从仓库下载）
 │   ├── auto_format.py       # 写文件后自动格式化
 │   ├── block_dangerous.py   # 拦截危险 Bash 命令
 │   ├── check_secrets.py     # 检测密钥泄露
@@ -265,8 +266,8 @@ claude-code-bootstrap/
 └── logs/                    # hooks 运行时生成的 JSON 日志（gitignore）
 ```
 
-> **注意**：仓库的 `hooks/*.py` 既是开发源文件，也是 `setup-claude.ps1` 嵌入内容的源。
-> 修改这些 hooks 后，需重新嵌入到 `setup-claude.ps1` 并更新 `$CHECKSUMS` 中的哈希。
+> **注意**：修改 `hooks/*.py` 后需更新 `checksums.txt` 和 `setup-claude.ps1` 中的 `$CHECKSUMS` 哈希值。
+> 可运行 `scripts/update-checksums.ps1` 自动刷新。
 
 ## 📖 GeneralConfiguration.json 字段说明
 
