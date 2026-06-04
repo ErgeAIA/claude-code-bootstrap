@@ -1182,15 +1182,16 @@ function Show-Summary {
 # ============================================================
 try {
     $esc = [char]27
+    # OKLCH 校色色板（来源：Microsoft.PowerShell_profile.ps1）
     Write-Host ''
-    Write-Host "$esc[38;2;193;137;252m                                          ████  ███   ████  ███    ██  ██  ██$esc[0m"
-    Write-Host "$esc[38;2;251;108;160m                                          █     █  █  █     █  █  █  █ ██ █  █$esc[0m"
-    Write-Host "$esc[38;2;0;188;197m                                          ███   ███   █ ██  ███   ███  ██ ███$esc[0m"
-    Write-Host "$esc[38;2;59;156;246m                                          █     █ █   █  █  █     █  █ ██ █  █$esc[0m"
-    Write-Host "$esc[38;2;183;184;64m                                          ████  █  █  ████  ████  █  █ ██ █  █$esc[0m"
+    Write-Host "$esc[38;2;59;156;246m                                          ████  ███   ████  ███    ██  ██  ██$esc[0m"   # cyberBlue
+    Write-Host "$esc[38;2;0;188;197m                                          █     █  █  █     █  █  █  █ ██ █  █$esc[0m" # neonCyan
+    Write-Host "$esc[38;2;193;137;252m                                          ███   ███   █ ██  ███   ███  ██ ███$esc[0m"  # electricPurple
+    Write-Host "$esc[38;2;251;108;160m                                          █     █ █   █  █  █     █  █ ██ █  █$esc[0m" # neonPink
+    Write-Host "$esc[38;2;183;184;64m                                          ████  █  █  ████  ████  █  █ ██ █  █$esc[0m" # neonYellow
     Write-Host ''
-    Write-Host "$esc[38;2;219;215;205m                                          Claude Code Bootstrap  v1.6.0$esc[0m"
-    Write-Host "$esc[38;2;230;152;37m                                          by 宝藏二哥AIA$esc[0m"
+    Write-Host "$esc[38;2;219;215;205m                                          Claude Code Bootstrap  v1.6.0$esc[0m"        # neonWhite
+    Write-Host "$esc[38;2;230;152;37m                                          by 宝藏二哥AIA$esc[0m"                  # fluorescentOrange
 
     # 先检测环境，再选择安装模式
     try {
