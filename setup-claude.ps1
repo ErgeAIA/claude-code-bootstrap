@@ -1820,26 +1820,27 @@ try {
     Write-Host '  Claude Code 一键部署脚本' -ForegroundColor Cyan
     Write-Host '  =========================' -ForegroundColor Cyan
 
+    # 先检测环境，再选择安装模式
+    try {
+        $prereqOk = Test-Prerequisites
+    } catch {
+        Write-Err "环境检测失败: $_"
+        Write-Host $_.ScriptStackTrace -ForegroundColor Red
+        $prereqOk = $false
+    }
+    if (-not $prereqOk) {
+        Write-Host ''
+        Write-Host '  按回车键退出...' -ForegroundColor Gray
+        [void][Console]::ReadLine()
+        exit 1
+    }
+
     # 确定安装模式
     if (-not $InstallMode) {
         $InstallMode = Read-InstallMode
     }
     Write-Host ''
     Write-Host "  安装模式：$InstallMode" -ForegroundColor $(if ($InstallMode -eq 'Full') { 'Yellow' } else { 'Green' })
-
-    try {
-        $prereqOk = Test-Prerequisites
-    } catch {
-        Write-Err "Environment check failed: $_"
-        Write-Host $_.ScriptStackTrace -ForegroundColor Red
-        $prereqOk = $false
-    }
-    if (-not $prereqOk) {
-        Write-Host ''
-        Write-Host '  Press Enter to exit...' -ForegroundColor Gray
-        [void][Console]::ReadLine()
-        exit 1
-    }
 
     # 防御性初始化
     $settingsStrategy = 'fresh'
