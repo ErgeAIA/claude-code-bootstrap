@@ -257,7 +257,7 @@ claude-code-bootstrap/
 │   └── verify_on_stop.py    # 完成前验证项目
 ├── .github/
 │   └── workflows/
-│       └── update-checksums.yml # 每周自动检测上游 hooks 变更并创建 PR
+│       └── update-checksums.yml # 每周自动检测上游 hooks 变更（disler + 用户自写 11 个文件）并创建 PR
 ├── README.md                # 本文件（中文文档）
 ├── CHANGELOG.md             # 中文更新日志
 ├── CHANGELOG.en.md          # English changelog

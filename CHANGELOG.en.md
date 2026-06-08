@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-06-04
+
 ### Changed
 - **setup-claude.ps1**: User hooks changed from embedded script content to repository download, unified with disler hooks; script size reduced from 73KB / 1897 lines to 52KB / 1257 lines (-28%)
 - **scripts/update-checksums.ps1**: Added user hooks download source (ErgeAIA repo), removed legacy embedded content preservation logic
+- **.github/workflows/update-checksums.yml**: Added user hooks checksum refresh support (11 files = 7 disler + 4 user-written); downloads now wrapped in try/catch/finally for isolation, single-file failure annotated with `::error::` and `exit 1`; replaced `Get-Content`/`Set-Content` with `[System.IO.File]::ReadAllText/WriteAllText` + UTF-8 no-BOM (consistent with encoding conventions); replaced conditional padding calculation with `[Math]::Max`
 
 ## [1.6.0] - 2026-06-04
 

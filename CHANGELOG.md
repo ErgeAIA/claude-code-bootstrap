@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-06-04
+
 ### Changed
 - **setup-claude.ps1**: 用户 hooks 从嵌入脚本改为从仓库下载，与 disler hooks 统一处理；脚本体积从 73KB / 1897 行缩减至 52KB / 1257 行（-28%）
 - **scripts/update-checksums.ps1**: 同步支持用户 hooks 下载源（ErgeAIA 仓库），移除旧的嵌入内容保留逻辑
+- **.github/workflows/update-checksums.yml**: 同步支持用户 hooks 校验和刷新（11 个文件 = 7 disler + 4 用户自写）；下载改为 try/catch/finally 隔离失败，单文件失败用 `::error::` 标注并 `exit 1`；`[System.IO.File]::ReadAllText/WriteAllText` + UTF-8 无 BOM 替换 `Get-Content`/`Set-Content`（与编码规范一致）；改用 `[Math]::Max` 替代条件 padding 计算
 
 ## [1.6.0] - 2026-06-04
 
@@ -195,7 +198,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - hooks 工作流部署
 - 国内网络环境优化配置
 
-[Unreleased]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.3.0...v1.4.0
