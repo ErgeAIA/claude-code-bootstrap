@@ -1,6 +1,6 @@
 # SHA256 checksums for downloaded hooks and status_line
 # Disler hooks: disler/claude-code-hooks-mastery
-# User hooks: ErgeAIA/claude-code-bootstrap/hooks/
+# User hooks:   ErgeAIA/claude-code-bootstrap/hooks/
 # Verify with: Get-FileHash -Algorithm SHA256 <file> | Select-Object -ExpandProperty Hash
 pre_tool_use.py:78006866F793CCD394BC52011582CE48707CEEF9D3496E474AB7BCB63365A5DA
 post_tool_use.py:6C3F0AA03CABC68670490A7CDAD6FC2364C94B074F9D6E317EA7C8ABE04C9449
