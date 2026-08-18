@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/ErgeAIA/claude-code-bootstrap?style=social)](https://github.com/ErgeAIA/claude-code-bootstrap)
 
-[快速开始](#-快速开始) · [功能特性](#-功能特性) · [作者信息](#-作者信息) · [更新日志](CHANGELOG.md)
+[快速开始](#-快速开始) · [功能特性](#-功能特性) · [作者信息](#作者信息) · [更新日志](CHANGELOG.md)
 
 </div>
 
@@ -382,31 +382,13 @@ claude
 - 网络环境（是否能访问 GitHub / Gitee）
 - 完整错误输出
 
-## 👤 作者信息
+## 作者信息
 
-<table>
-<tr>
-<td align="center" width="200">
-<img src="https://github.com/ErgeAIA.png" width="100" style="border-radius: 50%"><br>
-<b>宝藏二哥AIA / ErgeAIA</b><br>
-<sub>生命不息，折腾不止</sub>
-</td>
-<td>
+**宝藏二哥AIA / ErgeAIA** — 独立开发者，理念：三无分享（无门槛、无套路、无保留）。
 
-**关于我**：独立开发者 / 全栈工程师 / 产品经理 / Vibe Coding 实践者
-
-**技术栈**：Tauri · Rust · React · Python · Claude · Cursor · Trae
-
-**理念**：三无分享 — 无门槛、无套路、无保留
-
-**链接**：
-- 📺 [B 站](https://space.bilibili.com/67221461) · 知乎 · 微信
-- 🐙 [GitHub](https://github.com/ErgeAIA) · [Gitee](https://gitee.com/ErgeAIA)
-- 📦 精选项目：[ErgeAIA-skills](https://github.com/ErgeAIA/ErgeAIA-skills) · [ErgeMD](https://github.com/ErgeAIA/ErgeMD) · [catapult-cn](https://github.com/ErgeAIA/catapult-cn)
-
-</td>
-</tr>
-</table>
+- 视频：[B 站](https://space.bilibili.com/67221461) · [知乎](https://www.zhihu.com/people/meli55a/posts)
+- 代码：[GitHub](https://github.com/ErgeAIA) · [Gitee](https://gitee.com/ErgeAIA)
+- 邮箱：ergeaia@agent.qq.com
 
 ---
 
