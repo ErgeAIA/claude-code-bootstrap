@@ -358,57 +358,76 @@ function Install-Native {
     $tmpDir = Join-Path $env:TEMP 'claude-install'
     New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 
-    $job = Start-Job -ScriptBlock {
-        param($GCS, $arch, $tmpDir, $VERSIONS_DIR, $BIN_DIR, $LINK_PATH, $Target)
-        $ProgressPreference = 'SilentlyContinue'
-
-        # 决定目标版本
-        if ($Target -eq 'latest' -or $Target -eq 'stable') {
-            $version = (Invoke-RestMethod "$GCS/latest" -TimeoutSec 30).ToString().Trim()
-        } else {
-            $version = $Target
-        }
-
-        $manifest = Invoke-RestMethod "$GCS/$version/manifest.json" -TimeoutSec 30
-        $checksum = $manifest.platforms.$arch.checksum
-        $size     = $manifest.platforms.$arch.size
-        if (-not $checksum) { throw "Platform $arch not in manifest" }
-
-        $binaryPath  = Join-Path $tmpDir "claude-$version-$arch.exe"
-        $downloadUrl = "$GCS/$version/$arch/claude.exe"
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $binaryPath -TimeoutSec 300 -ErrorAction Stop
-
-        if ($size -and ((Get-Item $binaryPath).Length -ne [int64]$size)) {
-            throw "Size mismatch: expected $size, got $((Get-Item $binaryPath).Length)"
-        }
-
-        $actual = (Get-FileHash -Path $binaryPath -Algorithm SHA256).Hash.ToLower()
-        if ($actual -ne $checksum) {
-            throw "SHA256 mismatch: expected $checksum, got $actual"
-        }
-
-        $finalPath = Join-Path $VERSIONS_DIR "$version.exe"
-        Move-Item -Force $binaryPath $finalPath
-        Copy-Item -Force $finalPath $LINK_PATH
-
-        return @{ Version = $version }
-    } -ArgumentList $GCS_BUCKET, $arch, $tmpDir, $VERSIONS_DIR, $BIN_DIR, $LINK_PATH, $ClaudeVersion
-
-    $finished = Wait-Job $job -Timeout $InstallTimeout
-    if ($null -eq $finished) {
-        Stop-Job $job -ErrorAction SilentlyContinue
-        Remove-Job $job -Force -ErrorAction SilentlyContinue
-        throw "Native 安装超时（$InstallTimeout 秒）"
+    # 决定目标版本
+    if ($ClaudeVersion -eq 'latest' -or $ClaudeVersion -eq 'stable') {
+        $version = (Invoke-RestMethod "$GCS_BUCKET/latest" -TimeoutSec 30).ToString().Trim()
+    } else {
+        $version = $ClaudeVersion
     }
 
-    if ($job.State -eq 'Failed') {
-        $reason = $job.ChildJobs[0].JobStateInfo.Reason.Message
-        Remove-Job $job -Force
-        throw "Native 安装失败：$reason"
+    $manifest = Invoke-RestMethod "$GCS_BUCKET/$version/manifest.json" -TimeoutSec 30
+    $checksum = $manifest.platforms.$arch.checksum
+    $size     = $manifest.platforms.$arch.size
+    if (-not $checksum) { throw "Platform $arch not in manifest" }
+
+    $binaryPath  = Join-Path $tmpDir "claude-$version-$arch.exe"
+    $downloadUrl = "$GCS_BUCKET/$version/$arch/claude.exe"
+
+    # 同步下载 + 真实进度条：HttpClient 流式读取，CancellationToken 控制总超时（替代原 Start-Job，
+    # job 是独立会话无法在主控制台显示进度）。$InstallTimeout 覆盖整个下载，单次请求不再单独限时。
+    Write-Info "  下载 $version（约 $([math]::Round($size/1MB,0)) MB，总超时 $InstallTimeout 秒）:"
+    $client = [System.Net.Http.HttpClient]::new()
+    $client.Timeout = [System.Threading.Timeout]::InfiniteTimeSpan   # 超时统一由 cts 控制
+    $cts = [System.Threading.CancellationTokenSource]::new()
+    $cts.CancelAfter([TimeSpan]::FromSeconds($InstallTimeout))
+    try {
+        $resp = $client.GetAsync($downloadUrl, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead, $cts.Token).GetAwaiter().GetResult()
+        if (-not $resp.IsSuccessStatusCode) { throw "HTTP $([int]$resp.StatusCode)" }
+        $total = [long]$resp.Content.Headers.ContentLength
+        $stream = $resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+        $fs = [System.IO.File]::Create($binaryPath)
+        try {
+            $buffer = New-Object byte[] 81920
+            $downloaded = [long]0
+            $lastPct = -1
+            while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $fs.Write($buffer, 0, $read)
+                $downloaded += $read
+                if ($total -gt 0) {
+                    $pct = [int](($downloaded * 100) / $total)
+                    if ($pct -ne $lastPct) {
+                        Write-Progress -Activity '下载 Claude Code' -Status "$([math]::Round($downloaded/1MB,1)) / $([math]::Round($total/1MB,1)) MB" -PercentComplete $pct
+                        $lastPct = $pct
+                    }
+                } else {
+                    Write-Progress -Activity '下载 Claude Code' -Status "$([math]::Round($downloaded/1MB,1)) MB" -PercentComplete -1
+                }
+            }
+        } finally {
+            Write-Progress -Activity '下载 Claude Code' -Completed
+            $fs.Dispose(); $stream.Dispose(); $resp.Dispose()
+        }
+    } catch {
+        if ($cts.IsCancellationRequested) { throw "Native 下载超时（$InstallTimeout 秒）" }
+        throw "Native 下载失败：$_"
+    } finally {
+        $cts.Dispose(); $client.Dispose()
     }
 
-    $result = Receive-Job $job
-    Remove-Job $job -Force
+    # size 校验
+    if ($size -and ((Get-Item $binaryPath).Length -ne [int64]$size)) {
+        throw "Size mismatch: expected $size, got $((Get-Item $binaryPath).Length)"
+    }
+
+    # SHA256 校验
+    $actual = (Get-FileHash -Path $binaryPath -Algorithm SHA256).Hash.ToLower()
+    if ($actual -ne $checksum) {
+        throw "SHA256 mismatch: expected $checksum, got $actual"
+    }
+
+    $finalPath = Join-Path $VERSIONS_DIR "$version.exe"
+    Move-Item -Force $binaryPath $finalPath
+    Copy-Item -Force $finalPath $LINK_PATH
 
     # 写 .claude.json 标记 native
     $cfg = @{}
@@ -427,7 +446,7 @@ function Install-Native {
     $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
     [System.IO.File]::WriteAllText($CONFIG_PATH, ($cfg | ConvertTo-Json -Depth 10), $utf8NoBom)
 
-    Write-Ok "Native 安装成功 v$($result.Version)"
+    Write-Ok "Native 安装成功 v$version"
     return 'native'
 }
 
@@ -599,7 +618,7 @@ function Get-InstalledClaudeVersion {
 }
 
 function Upgrade-ClaudeCode {
-    Write-Step 'Claude Code 升级（原生二进制）'
+    Write-Step 'Claude Code 升级'
 
     $previousVersion = Get-InstalledClaudeVersion
     if ($previousVersion) {
@@ -610,13 +629,38 @@ function Upgrade-ClaudeCode {
     $targetLabel = if ($ClaudeVersion -eq 'latest' -or $ClaudeVersion -eq 'stable') { '最新稳定版' } else { "v$ClaudeVersion" }
     Write-Info "  目标版本: $targetLabel"
 
-    # 指定版本升级必须使用官方原生发行包；winget/npm 无法可靠地锁定目标版本。
-    Install-Native | Out-Null
-    Ensure-ClaudeOnPath -InstallMethod 'native' | Out-Null
+    # 指定精确版本时只走 native（winget/npm 的 manifest 收录滞后，无法保证该版本可装）；
+    # 升级到最新版时 native 失败可降级 winget / npm（winget 走微软 CDN，国内可达性通常优于 GCS）。
+    $isExact = $ClaudeVersion -notin @('latest', 'stable')
+    $methods = @(
+        @{ Name = 'Native (GCS 直连)'; Action = { Install-Native } },
+        @{ Name = 'winget';            Action = { Install-Winget } },
+        @{ Name = 'npm';               Action = { Install-Npm } }
+    )
+    if ($isExact) { $methods = @($methods[0]) }
+
+    $succeeded = $null
+    foreach ($m in $methods) {
+        try {
+            $succeeded = & $m.Action
+            break
+        } catch {
+            Write-Warn2 "$($m.Name) 失败：$_"
+        }
+    }
+    if (-not $succeeded) {
+        throw 'Claude Code 升级失败：native / winget / npm 均不可用，请检查网络后重试（可 -InstallTimeout 加大超时）'
+    }
+
+    Ensure-ClaudeOnPath -InstallMethod $succeeded | Out-Null
 
     $currentVersion = Get-InstalledClaudeVersion
     if ($currentVersion) {
-        Write-Ok "Claude Code 已升级到 $currentVersion"
+        if ($previousVersion -and $currentVersion -eq $previousVersion) {
+            Write-Warn2 "版本未变化（仍为 $currentVersion）：PATH 中可能残留旧安装（如 ~/.local/bin/claude.exe），请删除残留文件或重新打开终端后确认"
+        } else {
+            Write-Ok "Claude Code 已升级到 $currentVersion"
+        }
     } else {
         Write-Warn2 '升级完成，但当前终端无法读取新版本；请重新打开 PowerShell 后运行 claude --version 确认'
     }

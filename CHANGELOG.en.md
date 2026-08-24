@@ -8,10 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **setup-claude.ps1**: Native binary download now uses synchronous streaming with a real-time progress bar (`Write-Progress`, showing downloaded/total MB and percent), and prints the target version, size and total timeout upfront; total timeout is controlled by `-InstallTimeout` (replaces the background Job, which could not display progress on the main console).
 - **setup-claude.ps1**: Hook deployment now downloads in parallel (`ForEach-Object -Parallel`, concurrency 4 with exponential backoff retries of 2/5/10s plus random jitter), significantly speeding up Full-mode downloads of the 10 hooks + status_line.
 - **setup-claude.ps1**: When an installed Claude Code has a newer release, the script now shows a prompt and asks whether to upgrade immediately (defaults to yes — just press Enter; type `n` to skip; yes runs the same upgrade flow as `-Upgrade`; network/version-parse failures are silent and do not block installation).
 
 ### Changed
+- **setup-claude.ps1**: Upgrades (`-Upgrade` or interactive) now use three-tier fallback instead of native-only: on native failure it falls back to winget (Microsoft CDN, usually better reachability in China) then npm; an exact `-ClaudeVersion` still uses native only (winget/npm manifests lag behind and cannot guarantee an exact version). If the version is unchanged after upgrade, a hint about leftover old installs is shown.
 - **setup-claude.ps1**: Native install default wait timeout raised from 60s to 180s, and the per-request download timeout from 60s to 300s (the win32-x64 binary is ~215MB; 60s would require 3.5MB/s+ average, easily exceeded on normal/VPN networks); `-InstallTimeout` remains configurable.
 
 ### Fixed
