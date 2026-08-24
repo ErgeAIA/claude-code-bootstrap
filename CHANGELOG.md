@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **setup-claude.ps1**: 检测到已安装 Claude Code 且存在新版时，提示并询问是否立即升级（选是走 `-Upgrade` 同款升级流程，选否继续；网络/版本解析异常时静默不阻塞安装）
 
 ### Fixed
+- **setup-claude.ps1**: 修复交互升级（`Test-ClaudeUpdate`）把 `Upgrade-ClaudeCode` 调用包进静默 catch，导致升级失败（如下载超时）被吞掉、界面只显示"升级流程开始"却未生效的问题——升级调用移至 try 之外，失败异常正常显示 FATAL
 - **setup-claude.ps1**: 修复 `$HOOK_SOURCES` 中 disler hooks 的基础 URL 缺失 `/hooks/` 路径段导致下载 404 的问题（此前 Full 模式部署 6 个 disler hooks 会全部失败）
 
 ## [1.7.0] - 2026-08-24

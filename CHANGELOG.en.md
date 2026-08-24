@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **setup-claude.ps1**: When an installed Claude Code has a newer release, the script now shows a prompt and asks whether to upgrade immediately (yes runs the same upgrade flow as `-Upgrade`, no continues; network/version-parse failures are silent and do not block installation).
 
 ### Fixed
+- **setup-claude.ps1**: Fixed the interactive upgrade (`Test-ClaudeUpdate`) wrapping the `Upgrade-ClaudeCode` call inside a silent catch, which swallowed upgrade failures (e.g. download timeout) so the UI showed "upgrade started" but nothing happened — the upgrade call now sits outside the try block and failures surface as a normal FATAL error.
 - **setup-claude.ps1**: Fixed the `$HOOK_SOURCES` disler hook base URLs missing the `/hooks/` path segment, which caused 404s on download (previously all 6 disler hooks failed to deploy in Full mode).
 
 ## [1.7.0] - 2026-08-24

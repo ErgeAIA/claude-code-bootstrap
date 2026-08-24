@@ -626,24 +626,27 @@ function Upgrade-ClaudeCode {
 # 网络失败静默（不阻塞安装）；版本号用正则提取纯数字后 [version] 数值比较。
 function Test-ClaudeUpdate {
     param([string]$CurrentVersion)
+    # 只把"查询最新版 + 版本比较"放进 try：网络/解析异常静默视为无新版。
+    # 升级调用必须放在 try 之外，否则升级失败（如下载超时）会被静默吞掉，用户看到"升级流程开始"却什么都没发生。
+    $latest = $null
     try {
         $latest = (Invoke-RestMethod "$GCS_BUCKET/latest" -TimeoutSec 10).ToString().Trim()
         $curText = [regex]::Match($CurrentVersion, '\d+\.\d+\.\d+').Value
         $latText = [regex]::Match($latest, '\d+\.\d+\.\d+').Value
         if ([string]::IsNullOrEmpty($curText) -or [string]::IsNullOrEmpty($latText)) { return $false }
         if ([version]$latText -le [version]$curText) { return $false }
-
-        Write-Warn2 "检测到新版本 $latest（当前版本 $CurrentVersion）"
-        Write-Host '  是否现在升级？[y/N]（默认 N，稍后可用 .\setup-claude.ps1 -Upgrade 升级）' -ForegroundColor Cyan -NoNewline
-        $choice = (Read-Host).Trim()
-        if ($choice -eq 'y' -or $choice -eq 'Y') {
-            Upgrade-ClaudeCode
-            return $true
-        }
-        Write-Info '  已跳过升级，继续现有流程'
     } catch {
-        # 网络/版本解析异常：静默，不阻塞安装
+        return $false
     }
+
+    Write-Warn2 "检测到新版本 $latest（当前版本 $CurrentVersion）"
+    Write-Host '  是否现在升级？[y/N]（默认 N，稍后可用 .\setup-claude.ps1 -Upgrade 升级）' -ForegroundColor Cyan -NoNewline
+    $choice = (Read-Host).Trim()
+    if ($choice -eq 'y' -or $choice -eq 'Y') {
+        Upgrade-ClaudeCode
+        return $true
+    }
+    Write-Info '  已跳过升级，继续现有流程'
     return $false
 }
 
