@@ -10,6 +10,9 @@
 
     指定安装模式（需先下载再执行）：
     iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 -OutFile install.ps1; ./install.ps1 -InstallMode Full
+
+    升级 Claude Code（默认 latest，也可指定版本）：
+    iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 -OutFile install.ps1; ./install.ps1 -Upgrade -ClaudeVersion 2.1.153
 #>
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8

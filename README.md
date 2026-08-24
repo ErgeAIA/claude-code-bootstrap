@@ -157,11 +157,31 @@ flowchart TD
 # 安装具体版本
 .\setup-claude.ps1 -ClaudeVersion 2.1.153
 
+# 升级到最新稳定版（不修改 hooks 或 settings）
+.\setup-claude.ps1 -Upgrade
+
+# 升级到指定版本
+.\setup-claude.ps1 -Upgrade -ClaudeVersion 2.1.153
+
 # 仅部署 hooks（跳过 Claude Code 安装）
 .\setup-claude.ps1 -SkipClaudeInstall
 
 # 自定义 native 安装超时时间
 .\setup-claude.ps1 -InstallTimeout 120
+```
+
+> 升级使用官方 native 发行包，并校验 manifest、文件大小和 SHA256。为确保 `-ClaudeVersion` 的版本精确性，升级失败时不会自动回退到 winget 或 npm。
+
+通过在线入口升级时，先下载入口脚本再传参：
+
+```powershell
+iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 -OutFile install.ps1
+
+# 默认升级到最新稳定版
+.\install.ps1 -Upgrade
+
+# 升级到指定版本
+.\install.ps1 -Upgrade -ClaudeVersion 2.1.153
 ```
 
 ### 与 cc-switch 配合

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **setup-claude.ps1**: Added `-Upgrade`, which upgrades Claude Code to the latest stable release by default or to an exact release when combined with `-ClaudeVersion <version>`. Upgrades only replace Claude Code itself, leave hooks and settings untouched, and use the native release package with manifest, file-size, and SHA256 validation; winget/npm are not used because they cannot reliably pin an exact version.
+- **README.md**: Added command examples for upgrading to the latest stable release and an exact version.
+
 ### Fixed
 - **.github/workflows/update-checksums.yml**: Fixed a cascading failure in the `Create Pull Request` step where `Author identity unknown` caused `git commit` to fail without aborting the flow, resulting in an empty branch being pushed and `gh pr create` failing. Added a `Configure git identity` step before commit that explicitly sets `github-actions[bot]` `user.name`/`user.email`, and sets `core.quotepath=false` to prevent Chinese filenames from being octal-escaped
 - **.github/workflows/update-checksums.yml**: Fixed `git push` being rejected with `fetch first` when a previous failed run left an empty `update-checksums/<date>` branch on the remote. Branch name now appends `-<github.run_id>` for uniqueness across runs, eliminating the need for force-push

@@ -16,6 +16,8 @@
     仅部署 hooks，跳过 Claude Code 安装
 .PARAMETER ClaudeVersion
     指定安装版本，'latest' 或具体版本号如 '2.1.153'。默认 latest
+.PARAMETER Upgrade
+    升级已安装的 Claude Code。默认升级到最新稳定版；结合 -ClaudeVersion 可升级到指定版本。
 .PARAMETER InstallMode
     安装模式：Minimal（仅安装软件，默认）或 Full（安装软件 + hooks）
     未指定时交互式提示用户选择
@@ -25,6 +27,8 @@
     powershell -ExecutionPolicy Bypass -File .\setup-claude.ps1 -InstallMode Full
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\setup-claude.ps1 -SkipClaudeInstall
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File .\setup-claude.ps1 -Upgrade -ClaudeVersion 2.1.153
 #>
 
 [CmdletBinding()]
@@ -33,6 +37,7 @@ param(
     [switch]$SkipClaudeInstall,
     [ValidatePattern('^(stable|latest|\d+\.\d+\.\d+(-[^\s]+)?)$')]
     [string]$ClaudeVersion = 'latest',
+    [switch]$Upgrade,
     [ValidateSet('Minimal', 'Full')]
     [string]$InstallMode
 )
@@ -573,6 +578,43 @@ function Install-ClaudeCode {
 
     # 统一做 PATH 处理（无论哪种方式都跑）
     Ensure-ClaudeOnPath -InstallMethod $succeeded | Out-Null
+}
+
+function Get-InstalledClaudeVersion {
+    $command = if (Test-Path $LINK_PATH) { $LINK_PATH } elseif (Has-Command 'claude') { (Get-Command 'claude').Source } else { $null }
+    if (-not $command) { return $null }
+
+    try {
+        $version = (& $command --version 2>$null) -join ''
+        if ([string]::IsNullOrWhiteSpace($version)) { return $null }
+        return $version.Trim()
+    } catch {
+        return $null
+    }
+}
+
+function Upgrade-ClaudeCode {
+    Write-Step 'Claude Code 升级（原生二进制）'
+
+    $previousVersion = Get-InstalledClaudeVersion
+    if ($previousVersion) {
+        Write-Info "  当前版本: $previousVersion"
+    } else {
+        Write-Info '  未检测到现有 Claude Code，将安装目标版本'
+    }
+    $targetLabel = if ($ClaudeVersion -eq 'latest' -or $ClaudeVersion -eq 'stable') { '最新稳定版' } else { "v$ClaudeVersion" }
+    Write-Info "  目标版本: $targetLabel"
+
+    # 指定版本升级必须使用官方原生发行包；winget/npm 无法可靠地锁定目标版本。
+    Install-Native | Out-Null
+    Ensure-ClaudeOnPath -InstallMethod 'native' | Out-Null
+
+    $currentVersion = Get-InstalledClaudeVersion
+    if ($currentVersion) {
+        Write-Ok "Claude Code 已升级到 $currentVersion"
+    } else {
+        Write-Warn2 '升级完成，但当前终端无法读取新版本；请重新打开 PowerShell 后运行 claude --version 确认'
+    }
 }
 
 # ============================================================
@@ -1190,6 +1232,22 @@ try {
     Write-Host ''
     Write-Host "$esc[38;2;219;215;205m                                          Claude Code Bootstrap  v1.6.0$esc[0m"        # neonWhite
     Write-Host "$esc[38;2;230;152;37m                                          by 宝藏二哥AIA$esc[0m"                  # fluorescentOrange
+
+    # 升级不依赖 Git、UV、Node.js，也不应触发其自动安装。
+    if ($Upgrade) {
+        if ($SkipClaudeInstall) {
+            throw '-Upgrade 与 -SkipClaudeInstall 不能同时使用'
+        }
+        if (-not [Environment]::Is64BitOperatingSystem) {
+            throw 'Claude Code 升级仅支持 64 位 Windows'
+        }
+
+        Upgrade-ClaudeCode
+        Write-Host ''
+        Write-Host '  [OK] 升级完成' -ForegroundColor Green
+        Write-Host ''
+        exit 0
+    }
 
     # 先检测环境，再选择安装模式
     try {
