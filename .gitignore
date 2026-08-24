@@ -14,6 +14,10 @@ desktop.ini
 *.temp
 ~$*
 
+# Python（hooks 测试生成）
+__pycache__/
+*.pyc
+
 # IDE
 .vscode/
 .idea/

@@ -65,7 +65,7 @@ $CHECKSUMS = @{
     'post_tool_use_failure.py'= '46BA935B917E7F8EAD0273E968BE09201E51016913F41A6E9E8DB908BE06D822'
     'session_end.py'          = 'F316D341AE6A3A60E3E5A0DDD0DFD3360DA793A31E80B4B7B44C00F755E15426'
     'status_line_v6.py'       = 'B71DEB25E7C2308B1AB134DFE686E4E6A50612AA4FB91C98CA98327B78A19803'
-    'auto_format.py'          = 'BAF7FA4737BAE65C23D42E24CFCE902881ABC3DE43C24F10DE34A3475D50B2C8'
+    'auto_format.py'          = '3447A12D944EDBFBABCA3407026634714B863AF00D106BDAB522CB80165C64E7'
     'block_dangerous.py'      = '769A7996ECD918B2611EA853330B340F8055AEEE3054B5E1F02650E47913A05F'
     'check_secrets.py'        = 'D16970556CF9A8EE230230E9FD6D18002D091C3239FC5658D460DE444F3F3607'
     'verify_on_stop.py'       = '9E4EF09A78183EDC1833CB4794AA90959DFD32382EAF3BCA14DCF63DFD530ED5'
@@ -96,6 +96,9 @@ $HOOK_SOURCES = @{
     'verify_on_stop.py'       = $USER_REPO
 }
 $STATUS_LINE = 'status_line_v6.py'
+
+# hooks 部署失败计数（Show-Summary 结局检查用；hooks 缺失只警告不中断，避免网络抖动导致整次安装失败）
+$script:HookDeployFailures = 0
 
 # ============================================================
 #  日志工具
@@ -227,15 +230,13 @@ function Test-Prerequisites {
     $results = [System.Collections.ArrayList]::new()
     $blockers = 0
 
-    # 1. PowerShell 版本
+    # 1. PowerShell 版本（脚本为 UTF-8 无 BOM，5.1 按系统 GBK 读取会乱码/解析失败，故硬性要求 7+）
     $psVer = $PSVersionTable.PSVersion
-    if ($psVer.Major -lt 5) {
-        [void]$results.Add(@{ Name = 'PowerShell'; Value = "$psVer"; Status = 'FAIL'; Note = '需要 5.1+' })
-        $blockers++
-    } elseif ($psVer.Major -ge 7) {
-        [void]$results.Add(@{ Name = 'PowerShell'; Value = "$psVer"; Status = 'OK'; Note = '推荐版本' })
+    if ($psVer.Major -ge 7) {
+        [void]$results.Add(@{ Name = 'PowerShell'; Value = "$psVer"; Status = 'OK'; Note = '必需版本' })
     } else {
-        [void]$results.Add(@{ Name = 'PowerShell'; Value = "$psVer"; Status = 'WARN'; Note = '建议升级到 7.x' })
+        [void]$results.Add(@{ Name = 'PowerShell'; Value = "$psVer"; Status = 'FAIL'; Note = '需要 7+（Win11 自带；Win10 请安装 PowerShell 7）' })
+        $blockers++
     }
 
     # 2. 系统架构
@@ -1126,6 +1127,7 @@ function Install-Hooks {
             }
         } catch {
             Write-Err "    $f 下载失败：$_"
+            $script:HookDeployFailures++
         }
     }
 
@@ -1151,6 +1153,7 @@ function Install-Hooks {
             }
         } catch {
             Write-Err "  $STATUS_LINE 下载失败：$_"
+            $script:HookDeployFailures++
         }
     }
 }
@@ -1208,6 +1211,13 @@ function Show-Summary {
     Write-Info '    uv --version'
     if ($InstallMode -eq 'Full') {
         Write-Info "    cat $((Join-Path $CLAUDE_HOME 'settings.json')) | ConvertFrom-Json"
+    }
+
+    if ($script:HookDeployFailures -gt 0) {
+        Write-Host ''
+        Write-Warn2 "⚠️  $($script:HookDeployFailures) 个 hooks/status_line 部署失败，settings.json 引用的 hook 可能缺失。"
+        Write-Warn2 '   请检查网络后重跑；多次失败可删除 ~/.claude/hooks/ 下失败文件后重试。'
+        Write-Host ''
     }
 
     Write-Host ''

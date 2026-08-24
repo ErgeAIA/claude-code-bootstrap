@@ -54,8 +54,12 @@ def run_silent(cmd: list[str], timeout: int = FORMAT_TIMEOUT_S) -> bool:
         return False
 
 
-def format_by_extension(path: Path) -> None:
-    """根据扩展名选择 formatter"""
+def format_by_extension(path: Path) -> str | None:
+    """根据扩展名选择 formatter。
+
+    Returns:
+        formatter 名称（如 "rustfmt"），未匹配或未执行返回 None
+    """
     ext = path.suffix.lower()
     for exts, candidates in FORMATTERS:
         if ext not in exts:
@@ -64,8 +68,9 @@ def format_by_extension(path: Path) -> None:
             cmd = [arg.replace("{path}", str(path)) for arg in tmpl]
             if has_command(cmd[0]):
                 run_silent(cmd)
-                return
-        return
+                return cmd[0]
+        return None
+    return None
 
 
 def main() -> None:
@@ -81,7 +86,21 @@ def main() -> None:
         if not path.exists():
             sys.exit(0)
 
-        format_by_extension(path)
+        formatter = format_by_extension(path)
+
+        # PostToolUse 阶段文件已被 formatter 改写，Claude 内存中的内容与磁盘失配
+        # 会导致后续 Edit/MultiEdit 基于旧内容失败；显式告知让 Claude 重新读取
+        if formatter:
+            output = {
+                "hookSpecificOutput": {
+                    "hookEventName": "PostToolUse",
+                    "additionalContext": (
+                        f"Auto-formatted {file_path} with {formatter}. "
+                        "The file content on disk changed; re-read it before further edits."
+                    ),
+                }
+            }
+            print(json.dumps(output, ensure_ascii=False))
 
         sys.exit(0)
     except json.JSONDecodeError:

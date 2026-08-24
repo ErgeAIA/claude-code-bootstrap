@@ -120,6 +120,8 @@ flowchart TD
 
 > 仅安装模式（默认）不会创建上述目录，仅安装 Claude Code 本体。
 >
+> hooks 文件已存在时安装会跳过（幂等）；上游 hooks 更新后如需升级，删除 `~/.claude/hooks/` 下对应文件后重跑即可。
+>
 > 所有 hooks（含 `[ErgeAIA]` 和 `[disler]`）均从 GitHub 仓库下载 + SHA256 校验。
 > `[ErgeAIA]` 源自本仓库 `hooks/` 目录，`[disler]` 源自 disler/claude-code-hooks-mastery。
 
@@ -250,8 +252,8 @@ iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install
 
 ## 📋 系统要求
 
-- Windows 10 1809+ / Windows 11
-- PowerShell 5.1+（Win10 自带 5.1，Win11 自带 7.x）
+- Windows 11（自带 PowerShell 7）/ Windows 10（需另装 [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows)）
+- **PowerShell 7+**（脚本为 UTF-8 无 BOM，PowerShell 5.1 按系统 GBK 读取中文会乱码/解析失败）
 - 64 位系统
 - 网络可访问 GitHub / Gitee（至少一个）
 
@@ -349,6 +351,8 @@ claude-code-bootstrap/
 | `deny`                              | 黑名单列表，匹配前缀的命令直接拒绝                |
 | `defaultMode`                       | 默认模式：`bypassPermissions`（跳过所有权限确认） |
 | `skipDangerousModePermissionPrompt` | 跳过危险模式下的二次确认弹窗                      |
+
+> ⚠️ **安全说明**：默认配置为 `bypassPermissions`（跳过确认弹窗以换取流畅度），危险命令拦截依赖 `block_dangerous.py` 等 hooks 的正则黑名单。**黑名单是"减速带"而非安全边界**（正则总有盲区，hook 异常时也会放行）。请勿在存放敏感密钥的机器上使用，或自行将 `defaultMode` 改为 `ask`。
 
 #### 允许执行的命令白名单
 
