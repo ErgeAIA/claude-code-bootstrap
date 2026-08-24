@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **setup-claude.ps1**: 检测到已安装 Claude Code 且存在新版时，提示并询问是否立即升级（默认升级，回车即执行；输 n 跳过；选是走 `-Upgrade` 同款升级流程；网络/版本解析异常时静默不阻塞安装）
 
 ### Changed
+- **平台**: 停用 Gitee 镜像仓库与双平台同步，主攻 GitHub——`install.ps1` 移除 Gitee 下载源（bootstrap 引导与主脚本下载均只走 GitHub raw）、README 移除 Gitee 徽章/国内镜像安装命令/智能镜像选源说明、AGENTS.md 双仓库同步规范改为单一仓库（本地已移除 gitee remote）
 - **setup-claude.ps1**: 升级（`-Upgrade` 或交互升级）从"仅 native"改为三级兜底：native 失败自动降级 winget（微软 CDN，国内可达性通常优于 GCS）→ npm；指定精确版本（`-ClaudeVersion`）时仍只走 native（winget/npm 的 manifest 收录滞后，无法保证精确版本可装）；升级后版本未变化时给出旧安装残留提示
 - **setup-claude.ps1**: native 安装默认等待超时从 60 秒调至 180 秒、下载单次请求超时从 60 秒调至 300 秒（win32-x64 二进制约 215MB，60 秒需要 3.5MB/s+ 平均速度，普通网络/VPN 下极易超时）；`-InstallTimeout` 可继续自定义
 

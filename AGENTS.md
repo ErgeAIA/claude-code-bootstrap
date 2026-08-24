@@ -5,7 +5,7 @@
 
 ## 核心文件
 
-- `install.ps1` — 入口脚本，镜像选源（Gitee/GitHub）。**无 `param()` 块**，命令行参数经 `$args` 原样透传给 `setup-claude.ps1`（新增参数无需改它）。
+- `install.ps1` — 入口脚本，从 GitHub 下载主脚本。**无 `param()` 块**，命令行参数经 `$args` 原样透传给 `setup-claude.ps1`（新增参数无需改它）。
 - `setup-claude.ps1` — 主体（约 1300 行）：环境检测 → 三级兜底安装（native GCS → winget → npm）→ hooks 部署 → `~/.claude/settings.json` 深度合并。所有函数 `PascalCase`，日志统一用 `Write-Step/Write-Ok/Write-Warn2/Write-Err/Write-Info`。
 - `hooks/` — 4 个用户自写 hook（`auto_format.py` / `block_dangerous.py` / `check_secrets.py` / `verify_on_stop.py`），Python，`uv run --script` 执行，**源文件提交到本仓库**。disler 上游 hook 不提交，安装时从 disler/claude-code-hooks-mastery 下载。
 - `checksums.txt` + `setup-claude.ps1` 内 `$CHECKSUMS` — SHA256 双份，内容必须一致。
@@ -46,5 +46,5 @@ pwsh -NoProfile -File scripts/smoke-test.ps1
 - **`GeneralConfiguration.json` 是 cc-switch 参考副本**，脚本实际用内嵌配置（`setup-claude.ps1` 的 `$settings`）——勿只改一处。
 - **安全模型**：默认 `defaultMode=bypassPermissions`，危险命令拦截依赖 hooks 黑名单（非安全边界，hook 异常时放行）。README 有披露，改权限相关代码时保持一致。
 - **`setup-claude.ps1` 交互式安装器**：错误路径 `[void][Console]::ReadLine()` 阻塞，CI/非交互场景会挂起；验证用参数化命令（如 `-Upgrade`、`-SkipClaudeInstall`、`-InstallMode`）。
-- **双仓库同步**：push 必须同时 `git push origin <branch> && git push gitee <branch>`（gitee 是镜像）。
+- **单一仓库**：只维护 GitHub（origin），push `git push origin <branch>` 即可（gitee 镜像已停用）。
 - 版本号 `vX.Y.Z` 硬编码在 `install.ps1` 和 `setup-claude.ps1` 的 banner，发版时两处都要改。

@@ -5,7 +5,6 @@
 **一键拉起 Claude Code 工作环境（Windows PowerShell）**
 
 [![GitHub](https://img.shields.io/badge/GitHub-ErgeAIA-181717?logo=github)](https://github.com/ErgeAIA/claude-code-bootstrap)
-[![Gitee](https://img.shields.io/badge/Gitee-镜像仓库-C71D23?logo=gitee)](https://gitee.com/ErgeAIA/claude-code-bootstrap)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/ErgeAIA/claude-code-bootstrap?style=social)](https://github.com/ErgeAIA/claude-code-bootstrap)
 
@@ -34,12 +33,6 @@
 iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 | iex
 ```
 
-国内网络推荐（自动测速，优先 Gitee）：
-
-```powershell
-iwr https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1 | iex
-```
-
 脚本会自动：
 1. 测速选择最快镜像源
 2. 下载主脚本 `setup-claude.ps1`
@@ -59,11 +52,9 @@ iwr https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1 | iex
 
 ```mermaid
 flowchart TD
-    A[开始] --> B[选择镜像源]
-    B --> C[Gitee / GitHub]
-    C --> D[下载 setup-claude.ps1]
-    D --> E[环境检测\n输出报告]
-    E --> F{选择安装模式}
+    A[开始] --> B[下载 setup-claude.ps1]
+    B --> C[环境检测\n输出报告]
+    C --> F{选择安装模式}
     F -->|0. 退出| Z[退出]
     F -->|1. Minimal| G[Claude Code 安装\n三级兜底: native → winget → npm]
     F -->|2. Full| H[Claude Code 安装]
@@ -83,10 +74,9 @@ flowchart TD
 | 类别                 | 说明                                       |
 | -------------------- | ------------------------------------------ |
 | 🛡️ **三级兜底安装**   | native (GCS) → winget → npm，任一成功即停  |
-| ⏱️ **超时自动切换**   | native 60 秒无响应自动降级，避免卡死       |
+| ⏱️ **超时自动切换**   | native 180 秒无响应自动降级，避免卡死       |
 | 🔐 **SHA256 校验**    | 二进制 + hooks 双重校验，防供应链攻击      |
 | 🔄 **幂等运行**       | 已装组件自动跳过，可重复执行               |
-| 🪞 **智能镜像选源**   | Gitee / GitHub 自动测速，优先最快          |
 | 🔁 **下载重试**       | 网络抖动自动重试 3 次                      |
 | 🛣️ **PATH 自动维护**  | native / winget / npm 三种位置都处理       |
 | 🪝 **hooks 可选部署** | 交互选择是否安装，默认不部署，尊重安全考量 |
@@ -255,7 +245,7 @@ iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install
 - Windows 11（自带 PowerShell 7）/ Windows 10（需另装 [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows)）
 - **PowerShell 7+**（脚本为 UTF-8 无 BOM，PowerShell 5.1 按系统 GBK 读取中文会乱码/解析失败）
 - 64 位系统
-- 网络可访问 GitHub / Gitee（至少一个）
+- 网络可访问 GitHub
 
 可选依赖（脚本会自动检测，缺失会警告或自动安装）：
 
@@ -404,7 +394,7 @@ claude
 如果你的环境遇到问题，请提供：
 - Windows 版本（`winver`）
 - PowerShell 版本（`$PSVersionTable.PSVersion`）
-- 网络环境（是否能访问 GitHub / Gitee）
+- 网络环境（是否能访问 GitHub）
 - 完整错误输出
 
 ## 作者信息

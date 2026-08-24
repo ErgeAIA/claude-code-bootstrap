@@ -2,8 +2,8 @@
 .SYNOPSIS
     claude-code-bootstrap 入口脚本（智能选源）
 .DESCRIPTION
-    自动从最快的镜像下载 setup-claude.ps1 并执行。
-    顺序：Gitee（国内）→ GitHub（国外）→ 失败报错。
+    自动从 GitHub 下载 setup-claude.ps1 并执行。
+    下载失败自动重试。
 .NOTES
     用户只需要这一条命令：
     iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 | iex
@@ -36,9 +36,8 @@ if ($args -contains '-Version') {
 # ============================================================
 if (-not $env:_CC_BOOTSTRAPPED) {
     $env:_CC_BOOTSTRAPPED = '1'
-    # 双源引导：Gitee 优先（国内 CDN 更新快），GitHub 兜底
+    # 引导下载本脚本（GitHub raw）
     $selfUrls = @(
-        'https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/install.ps1',
         'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1'
     )
     $tmpSelf = Join-Path $env:TEMP "install-$([guid]::NewGuid()).ps1"
@@ -72,15 +71,11 @@ if (-not $env:_CC_BOOTSTRAPPED) {
 }
 
 # ============================================================
-#  镜像源（按优先级排序）
+#  下载源
 # ============================================================
 $SOURCES = @(
     @{
-        Name = 'Gitee（国内）'
-        Url  = 'https://gitee.com/ErgeAIA/claude-code-bootstrap/raw/main/setup-claude.ps1'
-    },
-    @{
-        Name = 'GitHub（国外）'
+        Name = 'GitHub'
         Url  = 'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/setup-claude.ps1'
     }
 )
