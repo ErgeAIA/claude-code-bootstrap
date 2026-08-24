@@ -171,6 +171,7 @@ flowchart TD
 ```
 
 > 升级使用官方 native 发行包，并校验 manifest、文件大小和 SHA256。为确保 `-ClaudeVersion` 的版本精确性，升级失败时不会自动回退到 winget 或 npm。
+> 升级会把安装方式统一为官方原生二进制：无论之前是 native、winget 还是 npm 安装，升级后 `claude` 命令都指向 `~/.local/bin/claude.exe`（脚本自动处理 PATH），旧安装的残留文件不参与启动。
 
 通过在线入口升级时，先下载入口脚本再传参：
 
