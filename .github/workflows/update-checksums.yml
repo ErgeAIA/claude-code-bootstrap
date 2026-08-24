@@ -25,78 +25,12 @@ jobs:
           git config --global user.name  "github-actions[bot]"
           git config --global core.quotepath false
 
-      - name: Download hooks and compute SHA256
+      - name: Refresh hooks checksums (no-op when unchanged)
+        # 复用 scripts/update-checksums.ps1：先对比新旧 SHA256，无变化时直接退出且不写文件。
+        # 此前 CI 自带"下载→重写→git diff"会因格式噪声（注释空格、末尾换行）误判为变更，
+        # 导致每周生成不含任何真实哈希更新的空 PR。
         shell: pwsh
-        run: |
-          $DISLER_REPO = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
-          $USER_REPO   = 'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/hooks'
-
-          # 来源映射：本地相对路径 → (远程 URL, 文件名)
-          $files = [ordered]@{
-            'hooks/pre_tool_use.py'          = @{ Url = "$DISLER_REPO/hooks/pre_tool_use.py";          Name = 'pre_tool_use.py' }
-            'hooks/post_tool_use.py'         = @{ Url = "$DISLER_REPO/hooks/post_tool_use.py";         Name = 'post_tool_use.py' }
-            'hooks/session_start.py'         = @{ Url = "$DISLER_REPO/hooks/session_start.py";         Name = 'session_start.py' }
-            'hooks/user_prompt_submit.py'    = @{ Url = "$DISLER_REPO/hooks/user_prompt_submit.py";    Name = 'user_prompt_submit.py' }
-            'hooks/post_tool_use_failure.py' = @{ Url = "$DISLER_REPO/hooks/post_tool_use_failure.py"; Name = 'post_tool_use_failure.py' }
-            'hooks/session_end.py'           = @{ Url = "$DISLER_REPO/hooks/session_end.py";           Name = 'session_end.py' }
-            'status_lines/status_line_v6.py' = @{ Url = "$DISLER_REPO/status_lines/status_line_v6.py"; Name = 'status_line_v6.py' }
-            'hooks/auto_format.py'           = @{ Url = "$USER_REPO/auto_format.py";                   Name = 'auto_format.py' }
-            'hooks/block_dangerous.py'       = @{ Url = "$USER_REPO/block_dangerous.py";               Name = 'block_dangerous.py' }
-            'hooks/check_secrets.py'         = @{ Url = "$USER_REPO/check_secrets.py";                 Name = 'check_secrets.py' }
-            'hooks/verify_on_stop.py'        = @{ Url = "$USER_REPO/verify_on_stop.py";                Name = 'verify_on_stop.py' }
-          }
-
-          $newChecksums = [ordered]@{}
-          $failures     = @()
-          foreach ($entry in $files.GetEnumerator()) {
-            $info    = $entry.Value
-            $tmpFile = Join-Path $env:TEMP $info.Name
-            try {
-              Write-Host "Downloading $($info.Name)..."
-              Invoke-WebRequest -Uri $info.Url -OutFile $tmpFile -TimeoutSec 30 -ErrorAction Stop
-              $hash = (Get-FileHash -Path $tmpFile -Algorithm SHA256).Hash.ToUpper()
-              $newChecksums[$info.Name] = $hash
-              Write-Host "  SHA256: $hash"
-            } catch {
-              $failures += "$($info.Name): $_"
-              Write-Host "  [ERR] $($info.Name): $_" -ErrorAction Continue
-            } finally {
-              Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
-            }
-          }
-
-          if ($failures.Count -gt 0) {
-            Write-Host "::error::Failed to download $($failures.Count) file(s):"
-            $failures | ForEach-Object { Write-Host "::error::  $_" }
-            exit 1
-          }
-
-          # Write new checksums.txt
-          $lines = @(
-            '# SHA256 checksums for downloaded hooks and status_line'
-            '# Disler hooks: disler/claude-code-hooks-mastery'
-            '# User hooks:   ErgeAIA/claude-code-bootstrap/hooks/'
-            '# Verify with: Get-FileHash -Algorithm SHA256 <file> | Select-Object -ExpandProperty Hash'
-          )
-          foreach ($entry in $newChecksums.GetEnumerator()) {
-            $lines += "$($entry.Key):$($entry.Value)"
-          }
-          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-          [System.IO.File]::WriteAllText('checksums.txt', ($lines -join "`r`n"), $utf8NoBom)
-
-          # Update $CHECKSUMS in setup-claude.ps1
-          $setupContent = [System.IO.File]::ReadAllText('setup-claude.ps1', $utf8NoBom)
-          $checksumsBlock = "@{`n"
-          foreach ($entry in $newChecksums.GetEnumerator()) {
-            $key = $entry.Key
-            $pad = ' ' * ([Math]::Max(0, 24 - $key.Length))
-            $checksumsBlock += "    '$key'$pad= '$($entry.Value)'`n"
-          }
-          $checksumsBlock += "}"
-          $setupContent = $setupContent -replace "(?s)\`$CHECKSUMS = @\{.*?\}", "`$CHECKSUMS = $checksumsBlock"
-          [System.IO.File]::WriteAllText('setup-claude.ps1', $setupContent, $utf8NoBom)
-
-          Write-Host "checksums.txt and setup-claude.ps1 updated"
+        run: ./scripts/update-checksums.ps1
 
       - name: Check for changes
         id: diff

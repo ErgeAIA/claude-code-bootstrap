@@ -111,7 +111,7 @@ foreach ($entry in $newChecksums.GetEnumerator()) {
     $lines += "$($entry.Key):$($entry.Value)"
 }
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-[System.IO.File]::WriteAllText($checksumsPath, ($lines -join "`r`n"), $utf8NoBom)
+[System.IO.File]::WriteAllText($checksumsPath, (($lines -join "`r`n") + "`r`n"), $utf8NoBom)
 Write-Host ''
 Write-Host '  [OK] checksums.txt 已更新' -ForegroundColor Green
 
