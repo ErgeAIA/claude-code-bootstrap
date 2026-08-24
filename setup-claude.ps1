@@ -640,9 +640,9 @@ function Test-ClaudeUpdate {
     }
 
     Write-Warn2 "检测到新版本 $latest（当前版本 $CurrentVersion）"
-    Write-Host '  是否现在升级？[y/N]（默认 N，稍后可用 .\setup-claude.ps1 -Upgrade 升级）' -ForegroundColor Cyan -NoNewline
+    Write-Host '  是否现在升级？[Y/n]（默认 Y，直接回车即升级；输 n 跳过）' -ForegroundColor Cyan -NoNewline
     $choice = (Read-Host).Trim()
-    if ($choice -eq 'y' -or $choice -eq 'Y') {
+    if ($choice -eq '' -or $choice -eq 'y' -or $choice -eq 'Y') {
         Upgrade-ClaudeCode
         return $true
     }

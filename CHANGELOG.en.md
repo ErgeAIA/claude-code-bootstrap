@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **setup-claude.ps1**: Hook deployment now downloads in parallel (`ForEach-Object -Parallel`, concurrency 4 with exponential backoff retries of 2/5/10s plus random jitter), significantly speeding up Full-mode downloads of the 10 hooks + status_line.
-- **setup-claude.ps1**: When an installed Claude Code has a newer release, the script now shows a prompt and asks whether to upgrade immediately (yes runs the same upgrade flow as `-Upgrade`, no continues; network/version-parse failures are silent and do not block installation).
+- **setup-claude.ps1**: When an installed Claude Code has a newer release, the script now shows a prompt and asks whether to upgrade immediately (defaults to yes — just press Enter; type `n` to skip; yes runs the same upgrade flow as `-Upgrade`; network/version-parse failures are silent and do not block installation).
 
 ### Fixed
 - **setup-claude.ps1**: Fixed the interactive upgrade (`Test-ClaudeUpdate`) wrapping the `Upgrade-ClaudeCode` call inside a silent catch, which swallowed upgrade failures (e.g. download timeout) so the UI showed "upgrade started" but nothing happened — the upgrade call now sits outside the try block and failures surface as a normal FATAL error.
