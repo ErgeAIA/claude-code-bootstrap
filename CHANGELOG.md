@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **setup-claude.ps1**: hooks 部署改为并行下载（`ForEach-Object -Parallel`，并发 4 + 指数退避重试 2/5/10 秒 + 随机 jitter），Full 模式下载 10 hooks + status_line 大幅提速
 - **setup-claude.ps1**: 检测到已安装 Claude Code 且存在新版时，提示并询问是否立即升级（默认升级，回车即执行；输 n 跳过；选是走 `-Upgrade` 同款升级流程；网络/版本解析异常时静默不阻塞安装）
 
+### Changed
+- **setup-claude.ps1**: native 安装默认等待超时从 60 秒调至 180 秒、下载单次请求超时从 60 秒调至 300 秒（win32-x64 二进制约 215MB，60 秒需要 3.5MB/s+ 平均速度，普通网络/VPN 下极易超时）；`-InstallTimeout` 可继续自定义
+
 ### Fixed
 - **setup-claude.ps1**: 修复交互升级（`Test-ClaudeUpdate`）把 `Upgrade-ClaudeCode` 调用包进静默 catch，导致升级失败（如下载超时）被吞掉、界面只显示"升级流程开始"却未生效的问题——升级调用移至 try 之外，失败异常正常显示 FATAL
 - **setup-claude.ps1**: 修复 `$HOOK_SOURCES` 中 disler hooks 的基础 URL 缺失 `/hooks/` 路径段导致下载 404 的问题（此前 Full 模式部署 6 个 disler hooks 会全部失败）

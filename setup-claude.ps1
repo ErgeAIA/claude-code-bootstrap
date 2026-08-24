@@ -11,7 +11,7 @@
 
     通常由 install.ps1 拉取并调用，不建议直接运行。
 .PARAMETER InstallTimeout
-    native 安装的超时秒数。默认 60 秒
+    native 安装的等待超时秒数。默认 180 秒（native 二进制约 215MB，60 秒易超时；网络慢可再调大）
 .PARAMETER SkipClaudeInstall
     仅部署 hooks，跳过 Claude Code 安装
 .PARAMETER ClaudeVersion
@@ -33,7 +33,7 @@
 
 [CmdletBinding()]
 param(
-    [int]$InstallTimeout = 60,
+    [int]$InstallTimeout = 180,
     [switch]$SkipClaudeInstall,
     [ValidatePattern('^(stable|latest|\d+\.\d+\.\d+(-[^\s]+)?)$')]
     [string]$ClaudeVersion = 'latest',
@@ -376,7 +376,7 @@ function Install-Native {
 
         $binaryPath  = Join-Path $tmpDir "claude-$version-$arch.exe"
         $downloadUrl = "$GCS/$version/$arch/claude.exe"
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $binaryPath -TimeoutSec 60 -ErrorAction Stop
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $binaryPath -TimeoutSec 300 -ErrorAction Stop
 
         if ($size -and ((Get-Item $binaryPath).Length -ne [int64]$size)) {
             throw "Size mismatch: expected $size, got $((Get-Item $binaryPath).Length)"
