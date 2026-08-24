@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **setup-claude.ps1**: hooks 部署改为并行下载（`ForEach-Object -Parallel`，并发 4 + 指数退避重试 2/5/10 秒 + 随机 jitter），Full 模式下载 10 hooks + status_line 大幅提速
+- **setup-claude.ps1**: 检测到已安装 Claude Code 且存在新版时，提示并询问是否立即升级（选是走 `-Upgrade` 同款升级流程，选否继续；网络/版本解析异常时静默不阻塞安装）
+
+### Fixed
+- **setup-claude.ps1**: 修复 `$HOOK_SOURCES` 中 disler hooks 的基础 URL 缺失 `/hooks/` 路径段导致下载 404 的问题（此前 Full 模式部署 6 个 disler hooks 会全部失败）
+
 ## [1.7.0] - 2026-08-24
 
 ### Added

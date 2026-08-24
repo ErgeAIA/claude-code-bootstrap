@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **setup-claude.ps1**: Hook deployment now downloads in parallel (`ForEach-Object -Parallel`, concurrency 4 with exponential backoff retries of 2/5/10s plus random jitter), significantly speeding up Full-mode downloads of the 10 hooks + status_line.
+- **setup-claude.ps1**: When an installed Claude Code has a newer release, the script now shows a prompt and asks whether to upgrade immediately (yes runs the same upgrade flow as `-Upgrade`, no continues; network/version-parse failures are silent and do not block installation).
+
+### Fixed
+- **setup-claude.ps1**: Fixed the `$HOOK_SOURCES` disler hook base URLs missing the `/hooks/` path segment, which caused 404s on download (previously all 6 disler hooks failed to deploy in Full mode).
+
 ## [1.7.0] - 2026-08-24
 
 ### Added

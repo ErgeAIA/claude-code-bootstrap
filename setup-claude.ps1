@@ -87,13 +87,14 @@ $LINK_PATH    = Join-Path $BIN_DIR 'claude.exe'
 $CONFIG_PATH  = Join-Path $env:USERPROFILE '.claude.json'
 
 # hooks 来源映射：文件名 → 下载基础 URL
+# 注意：disler hooks 在仓库 .claude/hooks/ 下，基础 URL 需带 /hooks 段（此前缺失导致 404）
 $HOOK_SOURCES = @{
-    'pre_tool_use.py'         = $DISLER_REPO
-    'post_tool_use.py'        = $DISLER_REPO
-    'session_start.py'        = $DISLER_REPO
-    'user_prompt_submit.py'   = $DISLER_REPO
-    'post_tool_use_failure.py'= $DISLER_REPO
-    'session_end.py'          = $DISLER_REPO
+    'pre_tool_use.py'         = "$DISLER_REPO/hooks"
+    'post_tool_use.py'        = "$DISLER_REPO/hooks"
+    'session_start.py'        = "$DISLER_REPO/hooks"
+    'user_prompt_submit.py'   = "$DISLER_REPO/hooks"
+    'post_tool_use_failure.py'= "$DISLER_REPO/hooks"
+    'session_end.py'          = "$DISLER_REPO/hooks"
     'auto_format.py'          = $USER_REPO
     'block_dangerous.py'      = $USER_REPO
     'check_secrets.py'        = $USER_REPO
@@ -554,6 +555,7 @@ function Install-ClaudeCode {
     if (Has-Command 'claude') {
         $existing = (& claude --version 2>$null) -join ''
         Write-Ok "已检测到 Claude Code: $existing，跳过安装"
+        Test-ClaudeUpdate -CurrentVersion $existing | Out-Null
         Ensure-ClaudeOnPath -InstallMethod 'native' | Out-Null
         return
     }
@@ -618,6 +620,31 @@ function Upgrade-ClaudeCode {
     } else {
         Write-Warn2 '升级完成，但当前终端无法读取新版本；请重新打开 PowerShell 后运行 claude --version 确认'
     }
+}
+
+# 检测已安装版本是否有新版：有则提示并询问是否立即升级（选是走 Upgrade-ClaudeCode）。
+# 网络失败静默（不阻塞安装）；版本号用正则提取纯数字后 [version] 数值比较。
+function Test-ClaudeUpdate {
+    param([string]$CurrentVersion)
+    try {
+        $latest = (Invoke-RestMethod "$GCS_BUCKET/latest" -TimeoutSec 10).ToString().Trim()
+        $curText = [regex]::Match($CurrentVersion, '\d+\.\d+\.\d+').Value
+        $latText = [regex]::Match($latest, '\d+\.\d+\.\d+').Value
+        if ([string]::IsNullOrEmpty($curText) -or [string]::IsNullOrEmpty($latText)) { return $false }
+        if ([version]$latText -le [version]$curText) { return $false }
+
+        Write-Warn2 "检测到新版本 $latest（当前版本 $CurrentVersion）"
+        Write-Host '  是否现在升级？[y/N]（默认 N，稍后可用 .\setup-claude.ps1 -Upgrade 升级）' -ForegroundColor Cyan -NoNewline
+        $choice = (Read-Host).Trim()
+        if ($choice -eq 'y' -or $choice -eq 'Y') {
+            Upgrade-ClaudeCode
+            return $true
+        }
+        Write-Info '  已跳过升级，继续现有流程'
+    } catch {
+        # 网络/版本解析异常：静默，不阻塞安装
+    }
+    return $false
 }
 
 # ============================================================
@@ -1104,34 +1131,60 @@ function Install-Hooks {
     New-Item -ItemType Directory -Force -Path $HOOK_DIR, $SL_DIR, $LOG_DIR | Out-Null
     Write-Ok "目录就绪：$CLAUDE_HOME"
 
-    Write-Info "  下载 hooks（$($HOOK_SOURCES.Count) 个）:"
-    foreach ($entry in $HOOK_SOURCES.GetEnumerator()) {
-        $f = $entry.Key
-        $base = $entry.Value
-        $dest = Join-Path $HOOK_DIR $f
-        if (Test-Path $dest) {
-            Write-Info "    [SKIP] $f（已存在）"
-            continue
-        }
-        Write-Info "    [GET ] $f"
-        try {
-            $url = "$base/$f"
-            Invoke-DownloadFile -Url $url -Dest $dest
-            # SHA256 校验
-            if ($CHECKSUMS.ContainsKey($f)) {
-                $actual = (Get-FileHash -Path $dest -Algorithm SHA256).Hash.ToUpper()
-                $expected = $CHECKSUMS[$f].ToUpper()
-                if ($actual -ne $expected) {
-                    Remove-Item $dest -Force -ErrorAction SilentlyContinue
-                    throw "SHA256 mismatch: expected $expected, got $actual"
-                }
-                Write-Ok "    $f (SHA256 verified)"
-            } else {
-                Write-Warn2 "    $f (no checksum - skip verification)"
+    Write-Info "  下载 hooks（$($HOOK_SOURCES.Count) 个，并行）:"
+    # 并行下载（ForEach-Object -Parallel，PowerShell 7+）：网络差时 10 个文件串行下载会线性叠加重试等待。
+    # 并行作用域看不到父函数（Invoke-DownloadFile 等），故内联重试与 SHA256 校验；父变量经 $using: 传入。
+    # 下载到唯一临时文件再 Move-Item 原子落位，避免并发写半截文件；结果统一回主线程输出，保持顺序稳定。
+    $hookResults = @(
+        $HOOK_SOURCES.GetEnumerator() | ForEach-Object -Parallel {
+            $f    = $_.Key
+            $base = $_.Value
+            $dest = Join-Path $using:HOOK_DIR $f
+            $expected = $using:CHECKSUMS
+
+            if (Test-Path $dest) {
+                return @{ File = $f; Status = 'SKIP'; Detail = '已存在' }
             }
-        } catch {
-            Write-Err "    $f 下载失败：$_"
-            $script:HookDeployFailures++
+
+            $tmp = Join-Path $env:TEMP "hook-$([guid]::NewGuid().ToString('N'))-$f"
+            $url = "$base/$f"
+            try {
+                # 内联下载：3 次重试，间隔指数退避（2/5/10 秒）+ 随机 jitter 错开，
+                # 避免并发任务在同一抖动窗口同步重试（国内网络下 raw.githubusercontent.com TLS 握手偶发失败）
+                $downloaded = $false
+                for ($i = 1; $i -le 3; $i++) {
+                    try {
+                        Invoke-WebRequest -Uri $url -OutFile $tmp -TimeoutSec 30 -ErrorAction Stop
+                        if ((Test-Path $tmp) -and (Get-Item $tmp).Length -gt 0) { $downloaded = $true; break }
+                    } catch {
+                        if ($i -lt 3) { Start-Sleep -Seconds ((2, 5, 10)[$i - 1] + (Get-Random -Minimum 0 -Maximum 3)) }
+                    }
+                }
+                if (-not $downloaded) { throw "下载失败（重试 3 次）：$url" }
+
+                # SHA256 校验
+                if ($expected.ContainsKey($f)) {
+                    $actual = (Get-FileHash -Path $tmp -Algorithm SHA256).Hash.ToUpper()
+                    if ($actual -ne $expected[$f].ToUpper()) {
+                        throw "SHA256 mismatch: expected $($expected[$f]), got $actual"
+                    }
+                }
+                Move-Item -Force $tmp $dest
+                return @{ File = $f; Status = 'OK'; Detail = 'SHA256 verified' }
+            } catch {
+                return @{ File = $f; Status = 'FAIL'; Detail = $_.Exception.Message }
+            } finally {
+                Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+            }
+        } -ThrottleLimit 4
+    )
+
+    # 汇总输出（按文件名排序，输出顺序确定）
+    foreach ($r in ($hookResults | Sort-Object File)) {
+        switch ($r.Status) {
+            'SKIP' { Write-Info "    [SKIP] $($r.File)（已存在）" }
+            'OK'   { Write-Ok "    $($r.File) ($($r.Detail))" }
+            'FAIL' { Write-Err "    $($r.File) 下载失败：$($r.Detail)"; $script:HookDeployFailures++ }
         }
     }
 
@@ -1142,7 +1195,7 @@ function Install-Hooks {
         Write-Info "  [GET ] $STATUS_LINE"
         try {
             $slUrl = "$DISLER_REPO/status_lines/$STATUS_LINE"
-            Invoke-DownloadFile -Url $slUrl -Dest $slDest
+            Invoke-DownloadFile -Url $slUrl -Dest $slDest | Out-Null
             # SHA256 校验
             if ($CHECKSUMS.ContainsKey($STATUS_LINE)) {
                 $actual = (Get-FileHash -Path $slDest -Algorithm SHA256).Hash.ToUpper()
