@@ -20,6 +20,15 @@ $OutputEncoding           = [System.Text.Encoding]::UTF8
 $ErrorActionPreference    = 'Stop'
 $ProgressPreference       = 'SilentlyContinue'
 
+# 脚本版本（与 CHANGELOG 最新版本保持一致；setup-claude.ps1 中还有一份，发版时两处同步改）
+$SCRIPT_VERSION = '1.7.0'
+
+# 命令行直接查询版本号（无需下载 setup-claude.ps1）
+if ($args -contains '-Version') {
+    Write-Host "ErgeAIA / Claude Code Bootstrap  v$SCRIPT_VERSION"
+    exit 0
+}
+
 # ============================================================
 #  两阶段引导：通过 iwr | iex 调用时，先下载到文件再执行
 #  iwr 的 .Content 用系统默认 GBK 解码 UTF-8，中文会乱码
@@ -80,7 +89,7 @@ $TIMEOUT_SEC = 10
 $tmpScript   = Join-Path $env:TEMP "setup-claude-$([guid]::NewGuid()).ps1"
 
 Write-Host ''
-Write-Host '  ErgeAIA / Claude Code Bootstrap  v1.6.0' -ForegroundColor Cyan
+Write-Host "  ErgeAIA / Claude Code Bootstrap  v$SCRIPT_VERSION" -ForegroundColor Cyan
 Write-Host '  正在启动安装程序...' -ForegroundColor Gray
 Write-Host ''
 

@@ -7,13 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-08-24
+
 ### Added
 - **setup-claude.ps1**: Added `-Upgrade`, which upgrades Claude Code to the latest stable release by default or to an exact release when combined with `-ClaudeVersion <version>`. Upgrades only replace Claude Code itself, leave hooks and settings untouched, and use the native release package with manifest, file-size, and SHA256 validation; winget/npm are not used because they cannot reliably pin an exact version.
 - **README.md**: Added command examples for upgrading to the latest stable release and an exact version.
+- **hooks/auto_format.py**: After a successful format, the hook now tells Claude via `hookSpecificOutput.additionalContext` that the file was rewritten on disk, preventing later Edit/MultiEdit failures caused by mismatched in-memory content.
+- **hooks/tests/test_hooks.py**: Added pytest regression tests for the 4 hooks (14 cases covering dangerous-command blocking, secret detection, formatter selection, checker selection); run with `uv run --with pytest pytest hooks/tests/`.
+- **scripts/smoke-test.ps1**: Added smoke tests for the settings.json merge logic (8 assertions; extracts the real functions from `setup-claude.ps1` via AST, verifying permissions union/dedup, hook dedup by command, and user-priority `defaultMode`).
+
+### Changed
+- **PowerShell requirement**: Raised from 5.1+ to **7+** (README and `Test-Prerequisites` updated; scripts are UTF-8 without BOM, and 5.1 decodes them as system GBK, corrupting Chinese text or failing to parse).
+- **setup-claude.ps1**: Hook/status_line deployment failures now produce a prominent warning at the end of installation (no longer silent, but installation is not aborted to tolerate flaky networks).
+- **README.md**: Documented how hooks are updated (existing files are skipped; to upgrade, delete the corresponding files under `~/.claude/hooks/` and re-run).
 
 ### Fixed
 - **.github/workflows/update-checksums.yml**: Fixed a cascading failure in the `Create Pull Request` step where `Author identity unknown` caused `git commit` to fail without aborting the flow, resulting in an empty branch being pushed and `gh pr create` failing. Added a `Configure git identity` step before commit that explicitly sets `github-actions[bot]` `user.name`/`user.email`, and sets `core.quotepath=false` to prevent Chinese filenames from being octal-escaped
 - **.github/workflows/update-checksums.yml**: Fixed `git push` being rejected with `fetch first` when a previous failed run left an empty `update-checksums/<date>` branch on the remote. Branch name now appends `-<github.run_id>` for uniqueness across runs, eliminating the need for force-push
+- **.github/workflows/update-checksums.yml**: Fixed the workflow generating weekly PRs with no real checksum changes — the CI now reuses `scripts/update-checksums.ps1` (compares old vs new SHA256 first, exits without rewriting files when unchanged) and the checksums output format is unified (comment alignment, trailing newline), removing format-noise false positives
+
+### Security
+- **README.md**: Disclosed the security model boundary of the default `defaultMode=bypassPermissions` — dangerous-command blocking relies on hook regex blacklists, which are a "speed bump" rather than a security boundary (hooks fail open on exceptions); suggested switching to `ask` on sensitive machines
 
 ## [1.6.1] - 2026-06-04
 
@@ -207,7 +221,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hooks workflow deployment
 - China network environment optimization
 
-[Unreleased]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.1...v1.7.0
+[1.6.1]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.3.0...v1.4.0

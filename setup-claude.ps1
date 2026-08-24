@@ -39,7 +39,8 @@ param(
     [string]$ClaudeVersion = 'latest',
     [switch]$Upgrade,
     [ValidateSet('Minimal', 'Full')]
-    [string]$InstallMode
+    [string]$InstallMode,
+    [switch]$Version
 )
 
 Set-StrictMode -Version Latest
@@ -55,6 +56,9 @@ $OutputEncoding           = [System.Text.Encoding]::UTF8
 $GCS_BUCKET    = 'https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases'
 $DISLER_REPO   = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mastery/main/.claude'
 $USER_REPO     = 'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/hooks'
+
+# 脚本版本（与 CHANGELOG 最新版本保持一致；install.ps1 中还有一份，发版时两处同步改）
+$SCRIPT_VERSION = '1.7.0'
 
 # SHA256 checksums（与仓库根目录 checksums.txt 同步）
 $CHECKSUMS = @{
@@ -1229,6 +1233,12 @@ function Show-Summary {
 #  主流程
 # ============================================================
 try {
+    # 命令行查询版本号（-Version），不进入安装流程
+    if ($Version) {
+        Write-Host "Claude Code Bootstrap v$SCRIPT_VERSION"
+        exit 0
+    }
+
     $esc = [char]27
     # OKLCH 校色色板（来源：Microsoft.PowerShell_profile.ps1）
     Write-Host ''
@@ -1238,7 +1248,7 @@ try {
     Write-Host "$esc[38;2;251;108;160m                                          █     █ █   █  █  █     █  █ ██ █  █$esc[0m" # neonPink
     Write-Host "$esc[38;2;183;184;64m                                          ████  █  █  ████  ████  █  █ ██ █  █$esc[0m" # neonYellow
     Write-Host ''
-    Write-Host "$esc[38;2;219;215;205m                                          Claude Code Bootstrap  v1.6.0$esc[0m"        # neonWhite
+    Write-Host "$esc[38;2;219;215;205m                                          Claude Code Bootstrap  v${SCRIPT_VERSION}$esc[0m"        # neonWhite
     Write-Host "$esc[38;2;230;152;37m                                          by 宝藏二哥AIA$esc[0m"                  # fluorescentOrange
 
     # 升级不依赖 Git、UV、Node.js，也不应触发其自动安装。

@@ -7,13 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-08-24
+
 ### Added
 - **setup-claude.ps1**: 新增 `-Upgrade` 参数，默认将 Claude Code 升级到最新稳定版；可与 `-ClaudeVersion <版本号>` 组合升级到指定版本。升级仅更新 Claude Code 本体，不修改 hooks 或 settings，并强制使用带 manifest、文件大小和 SHA256 校验的原生发行包，避免 winget/npm 无法精确锁定版本的问题
 - **README.md**: 补充升级到最新稳定版和指定版本的命令示例
+- **hooks/auto_format.py**: 格式化成功后通过 `hookSpecificOutput.additionalContext` 告知 Claude 文件已被改写，避免 Claude 内存中的内容与磁盘失配导致后续 Edit/MultiEdit 失败
+- **hooks/tests/test_hooks.py**: 新增 4 个 hooks 的 pytest 回归测试（14 用例，覆盖危险命令拦截、密钥检测、formatter 选择、验证器选择）；运行 `uv run --with pytest pytest hooks/tests/`
+- **scripts/smoke-test.ps1**: 新增 settings.json 合并逻辑冒烟测试（8 项断言，AST 提取 `setup-claude.ps1` 真实函数，验证 permissions 并集去重、hooks 按 command 去重、defaultMode 用户优先）
+
+### Changed
+- **PowerShell 要求**: 从 5.1+ 明确为 **7+**（README 与 `Test-Prerequisites` 同步；脚本为 UTF-8 无 BOM，5.1 按系统 GBK 读取中文会乱码/解析失败）
+- **setup-claude.ps1**: hooks/status_line 部署失败时在安装结局给出醒目警告（不再静默吞掉，也不中断安装以容忍国内网络抖动）
+- **README.md**: 补充 hooks 更新方式说明（已存在则安装跳过，升级需删除 `~/.claude/hooks/` 下对应文件后重跑）
 
 ### Fixed
 - **.github/workflows/update-checksums.yml**: 修复 `Create Pull Request` 步骤因 `Author identity unknown` 导致 `git commit` 失败、却未中断流程，结果 push 空 branch + `gh pr create` 失败的连锁问题；新增 `Configure git identity` 步骤在 commit 之前显式设置 `github-actions[bot]` 的 `user.name` / `user.email`，并设 `core.quotepath=false` 避免中文文件名被八进制转义
 - **.github/workflows/update-checksums.yml**: 修复首次失败后残留的同名空 branch (`update-checksums/<date>`) 导致后续 run 的 `git push` 被 `fetch first` 拒绝的问题；branch 名字加 `-<github.run_id>` 后缀，每次 run 唯一，彻底避开 force-push 风险
+- **.github/workflows/update-checksums.yml**: 修复每周生成不含任何真实哈希变更的空 PR 的问题——CI 改用 `scripts/update-checksums.ps1`（先对比新旧 SHA256、无变化即退出、不重写文件），并统一 checksums 输出格式（注释对齐、末尾换行），消除格式噪声导致的误报
+
+### Security
+- **README.md**: 披露默认 `defaultMode=bypassPermissions` 的安全模型边界——危险命令拦截依赖 hooks 正则黑名单，是"减速带"而非安全边界，hook 异常时放行；建议敏感环境改用 `ask`
 
 ## [1.6.1] - 2026-06-04
 
@@ -206,7 +220,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - hooks 工作流部署
 - 国内网络环境优化配置
 
-[Unreleased]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/ErgeAIA/claude-code-bootstrap/compare/v1.4.0...v1.5.0
