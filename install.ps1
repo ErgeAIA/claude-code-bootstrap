@@ -13,6 +13,9 @@
 
     升级 Claude Code（默认 latest，也可指定版本）：
     iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 -OutFile install.ps1; ./install.ps1 -Upgrade -ClaudeVersion 2.1.153
+
+    卸载 Claude Code 并清理 hooks / 配置条目：
+    iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install.ps1 -OutFile install.ps1; ./install.ps1 -Uninstall
 #>
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -21,7 +24,7 @@ $ErrorActionPreference    = 'Stop'
 $ProgressPreference       = 'SilentlyContinue'
 
 # 脚本版本（与 CHANGELOG 最新版本保持一致；setup-claude.ps1 中还有一份，发版时两处同步改）
-$SCRIPT_VERSION = '1.7.0'
+$SCRIPT_VERSION = '1.8.0'
 
 # 命令行直接查询版本号（无需下载 setup-claude.ps1）
 if ($args -contains '-Version') {

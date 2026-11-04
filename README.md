@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/ErgeAIA/claude-code-bootstrap?style=social)](https://github.com/ErgeAIA/claude-code-bootstrap)
 
-[快速开始](#-快速开始) · [功能特性](#-功能特性) · [作者信息](#作者信息) · [更新日志](CHANGELOG.md)
+[快速开始](#-快速开始) · [图形界面](#-图形界面gui) · [功能特性](#-功能特性) · [作者信息](#作者信息) · [更新日志](CHANGELOG.md)
 
 </div>
 
@@ -47,6 +47,31 @@ iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install
 8. 验证安装结果
 
 **全程约 2-5 分钟**，取决于网络。
+
+## 🖥️ 图形界面（GUI）
+
+不想敲命令？仓库自带一个原生 Win32 小工具，单文件 exe（约 280 KB，无 .NET / Electron 依赖），一键完成：
+
+| 按钮 | 行为 |
+| --- | --- |
+| **安装** | 安装 Claude Code 本体 + PATH 配置（Minimal） |
+| **完整安装** | 安装本体 + 部署 10 个 hooks + status_line（Full） |
+| **检查更新** | 读取本机 `claude --version`，查询官方最新稳定版并显示是否可升级 |
+| **更新** | 升级到最新稳定版（复用 `-Upgrade` 三级兜底；仅检测到新版本时可点击） |
+| **卸载** | 移除 native / winget / npm 安装，并清理本工具部署的 hooks 与配置条目 |
+
+界面带实时彩色日志、版本状态卡片和运行进度条。卸载/安装删除的文件会先备份到 `~/.claude/backups/`。
+
+**构建**（需要 MinGW-w64 `g++` + `windres`）：
+
+```powershell
+pwsh -NoProfile -File gui/build.ps1
+# 产物：gui/dist/ClaudeBootstrap.exe
+```
+
+把 `ClaudeBootstrap.exe` 和 `setup-claude.ps1` 放在同一目录即可运行；GUI 也会自动向上查找仓库内的脚本，找不到时从 GitHub 下载到 `%LOCALAPPDATA%\claude-bootstrap\`。
+
+细节见 [gui/README.md](gui/README.md)。
 
 ## 执行流程
 
@@ -139,6 +164,28 @@ flowchart TD
 # 后续补装 hooks（跳过已安装的 Claude Code）
 .\setup-claude.ps1 -InstallMode Full -SkipClaudeInstall
 ```
+
+### 卸载
+
+```powershell
+.\setup-claude.ps1 -Uninstall
+```
+
+卸载会检测 native / winget / npm 安装并移除本体，删除本工具部署的 hooks 与 status_line，
+从 `settings.json` 清理对应条目（保留用户其他配置），并从 `.claude.json` 移除 `installMethod` 标记。
+删除前统一备份到 `~/.claude/backups/uninstall-<时间戳>/`；检测到 `claude` 进程运行中会中止。
+
+### 非交互参数（GUI / 自动化）
+
+```powershell
+# 已有 settings.json 时直接采用合并策略，不弹出交互选择
+.\setup-claude.ps1 -InstallMode Full -SettingsStrategy merge
+
+# 安装时跳过“发现新版本，是否立即升级”的询问
+.\setup-claude.ps1 -InstallMode Minimal -NoUpdateCheck
+```
+
+`-SettingsStrategy` 可选 `fresh` / `overwrite` / `merge` / `skip` / `cancel`，语义与交互菜单一致。
 
 ### 指定安装版本
 
@@ -258,7 +305,12 @@ iwr https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/install
 ```
 claude-code-bootstrap/
 ├── install.ps1              # 入口脚本（智能选源 + 自动重试）
-├── setup-claude.ps1         # 主体脚本（环境检测 + 安装 + 部署 hooks + 生成 settings.json + 配置保护）
+├── setup-claude.ps1         # 主体脚本（环境检测 + 安装 + 部署 hooks + 生成 settings.json + 配置保护 + 卸载）
+├── gui/                     # 原生 Win32 GUI（安装 / 卸载 / 检查更新 / 更新）
+│   ├── src/                 # main.cpp / util.cpp / 资源文件
+│   ├── build.ps1            # 一键构建（MinGW-w64）
+│   ├── make-icon.ps1        # 生成 app.ico
+│   └── README.md            # GUI 构建与使用说明
 ├── GeneralConfiguration.json # cc-switch 通用配置模板（参考用，脚本已内嵌）
 ├── checksums.txt            # hooks 和 status_line 的 SHA256 哈希值
 ├── scripts/

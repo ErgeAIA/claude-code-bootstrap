@@ -14,6 +14,9 @@ desktop.ini
 *.temp
 ~$*
 
+# GUI 构建产物
+gui/dist/
+
 # Python（hooks 测试生成）
 __pycache__/
 *.pyc

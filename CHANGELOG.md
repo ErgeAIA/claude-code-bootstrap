@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **gui/**: 新增原生 Win32 图形界面（C++17 / Win32 API，MinGW 静态编译单文件约 280 KB，无运行时依赖）：一键安装、完整安装（含 hooks）、检查更新、更新、卸载；实时彩色日志、版本状态卡片、忙碌进度条；版本检查使用 WinHTTP 直连官方 GCS，子进程通过 Job Object 管理，关闭窗口时同步终止；「更新」按钮仅在检测到新版本时可点击
+- **setup-claude.ps1**: 新增 `-Uninstall` 卸载模式——自动检测 native / winget / npm 安装并移除本体；删除本工具部署的 10 个 hooks 与 status_line；从 `settings.json` 清理引用这些文件的 hook 组与 statusLine（保留用户其他字段）；从 `.claude.json` 移除 `installMethod`；删除前统一备份到 `~/.claude/backups/uninstall-<时间戳>/`；仅当 `~/.local/bin` 为空时才移除该目录与用户 PATH 项；检测到 `claude` 进程运行时中止
+- **setup-claude.ps1**: 新增 `-NoUpdateCheck`（安装时跳过"发现新版本是否升级"交互）与 `-SettingsStrategy`（`fresh` / `overwrite` / `merge` / `skip` / `cancel`，已有 settings.json 时跳过交互），供 GUI 与自动化调用
 - **setup-claude.ps1**: native 二进制下载改为同步流式 + 实时进度条（`Write-Progress`，显示已下载/总量 MB 与百分比），并提示目标版本、大小、总超时；总超时由 `-InstallTimeout` 统一控制（替代原后台 Job，Job 无法在主控制台显示进度）
 - **setup-claude.ps1**: hooks 部署改为并行下载（`ForEach-Object -Parallel`，并发 4 + 指数退避重试 2/5/10 秒 + 随机 jitter），Full 模式下载 10 hooks + status_line 大幅提速
 - **setup-claude.ps1**: 检测到已安装 Claude Code 且存在新版时，提示并询问是否立即升级（默认升级，回车即执行；输 n 跳过；选是走 `-Upgrade` 同款升级流程；网络/版本解析异常时静默不阻塞安装）
