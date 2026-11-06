@@ -6,10 +6,11 @@
 ## 核心文件
 
 - `install.ps1` — 入口脚本，从 GitHub 下载主脚本。**无 `param()` 块**，命令行参数经 `$args` 原样透传给 `setup-claude.ps1`（新增参数无需改它）。
-- `setup-claude.ps1` — 主体（约 1300 行）：环境检测 → 三级兜底安装（native GCS → winget → npm）→ hooks 部署 → `~/.claude/settings.json` 深度合并。所有函数 `PascalCase`，日志统一用 `Write-Step/Write-Ok/Write-Warn2/Write-Err/Write-Info`。
+- `setup-claude.ps1` — 主体（约 1700 行）：环境检测 → 三级兜底安装（native GCS → winget → npm）→ hooks 部署 → `~/.claude/settings.json` 深度合并；另含 `-Upgrade` / `-Uninstall` / `-SkipClaudeInstall` / `-InstallMode` / `-NoUpdateCheck` / `-SettingsStrategy`。所有函数 `PascalCase`，日志统一用 `Write-Step/Write-Ok/Write-Warn2/Write-Err/Write-Info`。
 - `hooks/` — 4 个用户自写 hook（`auto_format.py` / `block_dangerous.py` / `check_secrets.py` / `verify_on_stop.py`），Python，`uv run --script` 执行，**源文件提交到本仓库**。disler 上游 hook 不提交，安装时从 disler/claude-code-hooks-mastery 下载。
 - `checksums.txt` + `setup-claude.ps1` 内 `$CHECKSUMS` — SHA256 双份，内容必须一致。
 - `scripts/update-checksums.ps1` — 刷新双份校验和；`scripts/smoke-test.ps1` — 合并逻辑冒烟；`hooks/tests/test_hooks.py` — pytest 回归。
+- `gui/` — 原生 Win32 图形界面（C++17 / Win32 API，MinGW 静态编译单文件），给 `setup-claude.ps1` 套壳：安装 / 完整安装 / 检查更新 / 更新 / 卸载。产物 `gui/dist/ClaudeBootstrap.exe`（已 gitignore）。构建见 `gui/build.ps1`，细节见 `gui/README.md`。
 - `.github/workflows/update-checksums.yml` — 每周检测上游 hooks 哈希，**仅在哈希实际变化时**创建 PR（已修复，无变化零 PR）。
 
 ## 验证命令（改代码后必跑）
@@ -24,6 +25,8 @@ pwsh -NoProfile -File scripts/smoke-test.ps1
 # PowerShell 语法验证：必须用 ParseInput + UTF-8 显式读取，
 # 用 ParseFile 会因 GBK 误读 UTF-8 无 BOM 中文而误报语法错误
 ```
+
+GUI 改动后另跑 `pwsh -NoProfile -File gui/build.ps1`，确认 0 warning / 0 error 并实际启动一次。
 
 ## 编码与运行时规范（强制）
 
@@ -45,6 +48,9 @@ pwsh -NoProfile -File scripts/smoke-test.ps1
 - **settings 合并语义**（`Merge-Hooks` / `Merge-Permissions`）：env 用户优先、hooks 按 command 去重追加、permissions allow/deny 并集、defaultMode 用户优先、其他字段保留。改动前先跑 `scripts/smoke-test.ps1`。
 - **`GeneralConfiguration.json` 是 cc-switch 参考副本**，脚本实际用内嵌配置（`setup-claude.ps1` 的 `$settings`）——勿只改一处。
 - **安全模型**：默认 `defaultMode=bypassPermissions`，危险命令拦截依赖 hooks 黑名单（非安全边界，hook 异常时放行）。README 有披露，改权限相关代码时保持一致。
-- **`setup-claude.ps1` 交互式安装器**：错误路径 `[void][Console]::ReadLine()` 阻塞，CI/非交互场景会挂起；验证用参数化命令（如 `-Upgrade`、`-SkipClaudeInstall`、`-InstallMode`）。
+- **`setup-claude.ps1` 交互式安装器**：错误路径 `[void][Console]::ReadLine()` 阻塞，CI/非交互场景会挂起；验证用参数化命令（如 `-Upgrade`、`-SkipClaudeInstall`、`-InstallMode`、`-Uninstall`、`-NoUpdateCheck`、`-SettingsStrategy`）。
+- **GUI 子进程约定**：所有 PowerShell 子进程隐藏窗口 + NUL stdin，依赖上面的「参数化调用」避免 `Read-Host` 阻塞界面；子进程挂 Job Object，关窗即终止。GUI 安装/更新/卸载**不复制业务逻辑**，只委托给脚本，改行为请改脚本。
+- **GUI 查找主脚本顺序**：exe 同目录 → 上 1~4 级目录 → `%LOCALAPPDATA%\claude-bootstrap\setup-claude.ps1` → 从 GitHub raw 下载到缓存目录。
+- **`-Uninstall`**：删除前统一备份到 `~/.claude/backups/uninstall-<时间戳>/`；仅当 `~/.local/bin` 为空才移除该目录与用户 PATH 项；检测到 `claude` 进程运行会中止。
 - **单一仓库**：只维护 GitHub（origin），push `git push origin <branch>` 即可（gitee 镜像已停用）。
 - 版本号 `vX.Y.Z` 硬编码在 `install.ps1` 和 `setup-claude.ps1` 的 banner，发版时两处都要改。

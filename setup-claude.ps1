@@ -18,6 +18,14 @@
     指定安装版本，'latest' 或具体版本号如 '2.1.153'。默认 latest
 .PARAMETER Upgrade
     升级已安装的 Claude Code。默认升级到最新稳定版；结合 -ClaudeVersion 可升级到指定版本。
+.PARAMETER Uninstall
+    卸载 Claude Code（native / winget / npm）并清理本工具部署的 hooks、status_line 与 settings.json 条目。
+    删除前会自动备份到 ~/.claude/backups/uninstall-<时间戳>/。
+.PARAMETER NoUpdateCheck
+    安装时跳过"检测到新版本是否升级"的交互提示（GUI / 自动化场景使用）。
+.PARAMETER SettingsStrategy
+    Full 模式写入 settings.json 的策略：fresh / overwrite / merge / skip / cancel。
+    指定后跳过交互询问（GUI 默认传 merge）。
 .PARAMETER InstallMode
     安装模式：Minimal（仅安装软件，默认）或 Full（安装软件 + hooks）
     未指定时交互式提示用户选择
@@ -29,6 +37,8 @@
     powershell -ExecutionPolicy Bypass -File .\setup-claude.ps1 -SkipClaudeInstall
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\setup-claude.ps1 -Upgrade -ClaudeVersion 2.1.153
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File .\setup-claude.ps1 -Uninstall
 #>
 
 [CmdletBinding()]
@@ -38,6 +48,10 @@ param(
     [ValidatePattern('^(stable|latest|\d+\.\d+\.\d+(-[^\s]+)?)$')]
     [string]$ClaudeVersion = 'latest',
     [switch]$Upgrade,
+    [switch]$Uninstall,
+    [switch]$NoUpdateCheck,
+    [ValidateSet('fresh', 'overwrite', 'merge', 'skip', 'cancel')]
+    [string]$SettingsStrategy,
     [ValidateSet('Minimal', 'Full')]
     [string]$InstallMode,
     [switch]$Version
@@ -58,7 +72,7 @@ $DISLER_REPO   = 'https://raw.githubusercontent.com/disler/claude-code-hooks-mas
 $USER_REPO     = 'https://raw.githubusercontent.com/ErgeAIA/claude-code-bootstrap/main/hooks'
 
 # 脚本版本（与 CHANGELOG 最新版本保持一致；install.ps1 中还有一份，发版时两处同步改）
-$SCRIPT_VERSION = '1.7.0'
+$SCRIPT_VERSION = '1.8.0'
 
 # SHA256 checksums（与仓库根目录 checksums.txt 同步）
 $CHECKSUMS = @{
@@ -574,7 +588,11 @@ function Install-ClaudeCode {
     if (Has-Command 'claude') {
         $existing = (& claude --version 2>$null) -join ''
         Write-Ok "已检测到 Claude Code: $existing，跳过安装"
-        Test-ClaudeUpdate -CurrentVersion $existing | Out-Null
+        if ($NoUpdateCheck) {
+            Write-Info '  已跳过更新提示（-NoUpdateCheck）'
+        } else {
+            Test-ClaudeUpdate -CurrentVersion $existing | Out-Null
+        }
         Ensure-ClaudeOnPath -InstallMethod 'native' | Out-Null
         return
     }
@@ -870,6 +888,12 @@ function Read-SettingsJsonStrategy {
     $SETTINGS_PATH = Join-Path $CLAUDE_HOME 'settings.json'
     if (-not (Test-Path $SETTINGS_PATH)) {
         return 'fresh'   # 不存在，直接创建
+    }
+
+    # GUI / 自动化场景：由 -SettingsStrategy 直接指定策略，跳过交互
+    if ($SettingsStrategy) {
+        Write-Info "  使用指定策略：$SettingsStrategy（-SettingsStrategy）"
+        return $SettingsStrategy
     }
 
     Write-Host ''
@@ -1330,6 +1354,239 @@ function Show-Summary {
 }
 
 # ============================================================
+#  阶段 5：卸载（GUI / 命令行共用）
+# ============================================================
+function Invoke-Uninstall {
+    Write-Step '卸载 Claude Code 与 bootstrap 部署的 hooks'
+
+    # 运行中的 claude 会占用二进制文件，先要求退出所有会话
+    if (Get-Process -Name 'claude' -ErrorAction SilentlyContinue) {
+        throw '检测到 claude 进程正在运行，请先退出所有 Claude Code 会话后重试'
+    }
+
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $backupDir = Join-Path $CLAUDE_HOME "backups\uninstall-$stamp"
+
+    # 删除前统一备份，误删可从备份恢复
+    function Backup-UninstallFile {
+        param([string]$Path)
+        if (-not (Test-Path $Path)) { return }
+        New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+        Copy-Item $Path (Join-Path $backupDir (Split-Path $Path -Leaf)) -Force
+    }
+
+    $hookFiles = @(
+        'pre_tool_use.py', 'post_tool_use.py', 'session_start.py',
+        'user_prompt_submit.py', 'post_tool_use_failure.py', 'session_end.py',
+        'status_line_v6.py',
+        'auto_format.py', 'block_dangerous.py', 'check_secrets.py', 'verify_on_stop.py'
+    )
+
+    # ── 1. 检测本机安装方式（可能并存） ──
+    $methods = @()
+    if ((Test-Path $LINK_PATH) -or (Test-Path $INSTALL_BASE)) { $methods += 'native' }
+
+    $wingetDirs = @(
+        (Join-Path $env:ProgramFiles 'Claude Code'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\claude-code'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Claude Code')
+    )
+    foreach ($d in $wingetDirs) {
+        if (Test-Path (Join-Path $d 'claude.exe')) { $methods += 'winget'; break }
+    }
+
+    if (Has-Command 'npm') {
+        try {
+            $npmPrefix = (& npm config get prefix 2>$null).Trim()
+            if ($npmPrefix -and (Test-Path (Join-Path $npmPrefix 'node_modules\@anthropic-ai\claude-code'))) {
+                $methods += 'npm'
+            }
+        } catch {}
+    }
+
+    if ($methods.Count -eq 0) {
+        Write-Warn2 '  未检测到 Claude Code 本体安装，继续清理 hooks / 配置'
+    } else {
+        Write-Info "  检测到安装方式：$($methods -join ', ')"
+    }
+
+    # ── 2. 卸载 Claude Code 本体 ──
+    if ($methods -contains 'native') {
+        Write-Info '  移除 native 安装...'
+        foreach ($p in @($LINK_PATH, $INSTALL_BASE)) {
+            if (-not (Test-Path $p)) { continue }
+            Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue
+            if (Test-Path $p) { Write-Warn2 "  删除失败（可能被占用）：$p" }
+            else { Write-Ok "  已删除 $p" }
+        }
+
+        $tmpDir = Join-Path $env:TEMP 'claude-install'
+        if (Test-Path $tmpDir) {
+            Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        # ~/.local/bin 是通用目录：只有清空后才删除目录并移除用户 PATH
+        if (Test-Path $BIN_DIR) {
+            $left = @(Get-ChildItem $BIN_DIR -Force -ErrorAction SilentlyContinue)
+            if ($left.Count -gt 0) {
+                Write-Info "  $BIN_DIR 仍有其他文件，保留目录与 PATH"
+            } else {
+                Remove-Item $BIN_DIR -Force -ErrorAction SilentlyContinue
+                $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+                if ($userPath) {
+                    $sep = [char]';'
+                    $parts = @($userPath.Split($sep))
+                    $keep = @($parts | Where-Object {
+                        $_ -and ($_.TrimEnd('\') -ine $BIN_DIR.TrimEnd('\'))
+                    })
+                    if ($keep.Count -ne $parts.Count) {
+                        [Environment]::SetEnvironmentVariable('Path', ($keep -join ';'), 'User')
+                        Write-Ok "  已从用户 PATH 移除：$BIN_DIR"
+                    }
+                }
+            }
+        }
+    }
+
+    if ($methods -contains 'winget') {
+        if (Has-Command 'winget') {
+            & winget uninstall --id Anthropic.ClaudeCode -e --silent --accept-source-agreements
+            if ($LASTEXITCODE -eq 0) { Write-Ok '  winget 卸载完成' }
+            else { Write-Warn2 "  winget 卸载退出码 $LASTEXITCODE，可稍后在「应用和功能」中手动移除" }
+        } else {
+            Write-Warn2 '  winget 不可用，跳过 winget 安装的 Claude Code'
+        }
+    }
+
+    if ($methods -contains 'npm') {
+        if (Has-Command 'npm') {
+            & npm uninstall -g @anthropic-ai/claude-code
+            if ($LASTEXITCODE -eq 0) { Write-Ok '  npm 全局包已卸载' }
+            else { Write-Warn2 "  npm 卸载退出码 $LASTEXITCODE" }
+        } else {
+            Write-Warn2 '  npm 不可用，跳过 npm 安装的 Claude Code'
+        }
+    }
+
+    # ── 3. 删除本工具部署的 hooks / status_line ──
+    $removed = 0
+    foreach ($f in $hookFiles) {
+        foreach ($p in @((Join-Path $HOOK_DIR $f), (Join-Path $SL_DIR $f))) {
+            if (-not (Test-Path $p)) { continue }
+            Backup-UninstallFile -Path $p
+            Remove-Item $p -Force -ErrorAction SilentlyContinue
+            if (Test-Path $p) { Write-Warn2 "  删除失败：$p" }
+            else { Write-Ok "  已删除 $p"; $removed++ }
+        }
+    }
+    Write-Info "  共删除 $removed 个 hook / status_line 文件"
+
+    foreach ($d in @($HOOK_DIR, $SL_DIR)) {
+        if (Test-Path $d) {
+            $left = @(Get-ChildItem $d -Force -ErrorAction SilentlyContinue)
+            if ($left.Count -eq 0) { Remove-Item $d -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    # ── 4. 清理 settings.json 中本工具写入的条目（保留其他用户配置） ──
+    $SETTINGS_PATH = Join-Path $CLAUDE_HOME 'settings.json'
+    if (Test-Path $SETTINGS_PATH) {
+        Backup-UninstallFile -Path $SETTINGS_PATH
+        try {
+            $utf8NoBomLocal = [System.Text.UTF8Encoding]::new($false)
+            $raw = [System.IO.File]::ReadAllText($SETTINGS_PATH, $utf8NoBomLocal)
+            $cfg = if ([string]::IsNullOrWhiteSpace($raw)) { $null } else { ConvertFrom-JsonToHashtable $raw }
+            if ($null -eq $cfg) { $cfg = @{} }
+            $changed = $false
+
+            if ($cfg.ContainsKey('hooks') -and $cfg['hooks'] -is [hashtable]) {
+                $hooks = $cfg['hooks']
+                foreach ($evt in @($hooks.Keys)) {
+                    $groups = @($hooks[$evt])
+                    $keptGroups = @()
+                    foreach ($g in $groups) {
+                        if ($g -isnot [hashtable] -or -not $g.ContainsKey('hooks')) {
+                            $keptGroups += $g
+                            continue
+                        }
+                        $inner = @($g['hooks'])
+                        $keptInner = @($inner | Where-Object {
+                            $cmd = ''
+                            if ($_ -is [hashtable] -and $_.ContainsKey('command')) { $cmd = [string]$_['command'] }
+                            $isOurs = $false
+                            foreach ($f in $hookFiles) {
+                                if ($cmd -like "*$f*") { $isOurs = $true; break }
+                            }
+                            -not $isOurs
+                        })
+                        if ($keptInner.Count -eq 0) {
+                            $changed = $true
+                            continue
+                        }
+                        if ($keptInner.Count -ne $inner.Count) {
+                            $g['hooks'] = $keptInner
+                            $changed = $true
+                        }
+                        $keptGroups += $g
+                    }
+                    if ($keptGroups.Count -eq 0) {
+                        [void]$hooks.Remove($evt)
+                        $changed = $true
+                    } elseif ($keptGroups.Count -ne $groups.Count) {
+                        $hooks[$evt] = $keptGroups
+                        $changed = $true
+                    }
+                }
+                if ($hooks.Count -eq 0) {
+                    [void]$cfg.Remove('hooks')
+                    $changed = $true
+                }
+            }
+
+            if ($cfg.ContainsKey('statusLine') -and $cfg['statusLine'] -is [hashtable] -and
+                $cfg['statusLine'].ContainsKey('command') -and
+                [string]$cfg['statusLine']['command'] -like '*status_line_v6.py*') {
+                [void]$cfg.Remove('statusLine')
+                $changed = $true
+            }
+
+            if ($changed) {
+                $tmp = "$SETTINGS_PATH.tmp"
+                [System.IO.File]::WriteAllText($tmp, ($cfg | ConvertTo-Json -Depth 20), $utf8NoBomLocal)
+                Move-Item -Force $tmp $SETTINGS_PATH
+                Write-Ok '  已从 settings.json 移除 bootstrap hooks / statusLine'
+            } else {
+                Write-Info '  settings.json 无 bootstrap 条目，保持不变'
+            }
+        } catch {
+            Write-Warn2 "  settings.json 清理失败：$_（原文件已备份）"
+        }
+    }
+
+    # ── 5. 清理 .claude.json 中的安装方式标记 ──
+    if (Test-Path $CONFIG_PATH) {
+        Backup-UninstallFile -Path $CONFIG_PATH
+        try {
+            $utf8NoBomLocal = [System.Text.UTF8Encoding]::new($false)
+            $raw = [System.IO.File]::ReadAllText($CONFIG_PATH, $utf8NoBomLocal)
+            $cfg = if ([string]::IsNullOrWhiteSpace($raw)) { $null } else { ConvertFrom-JsonToHashtable $raw }
+            if ($cfg -is [hashtable] -and $cfg.ContainsKey('installMethod')) {
+                [void]$cfg.Remove('installMethod')
+                [System.IO.File]::WriteAllText($CONFIG_PATH, ($cfg | ConvertTo-Json -Depth 20), $utf8NoBomLocal)
+                Write-Ok '  已从 .claude.json 移除 installMethod 标记'
+            }
+        } catch {
+            Write-Warn2 "  .claude.json 清理失败：$_（原文件已备份）"
+        }
+    }
+
+    if (Test-Path $backupDir) {
+        Write-Info "  备份目录：$backupDir"
+    }
+    Write-Ok '  卸载完成（settings.json 的其他字段与 ~/.claude/backups 保留）'
+}
+
+# ============================================================
 #  主流程
 # ============================================================
 try {
@@ -1363,6 +1620,16 @@ try {
         Upgrade-ClaudeCode
         Write-Host ''
         Write-Host '  [OK] 升级完成' -ForegroundColor Green
+        Write-Host ''
+        exit 0
+    }
+
+    # 卸载不依赖 Git、UV、Node.js，也不应触发其自动安装。
+    if ($Uninstall) {
+        if ($Upgrade) { throw '-Uninstall 与 -Upgrade 不能同时使用' }
+        Invoke-Uninstall
+        Write-Host ''
+        Write-Host '  [OK] 卸载完成' -ForegroundColor Green
         Write-Host ''
         exit 0
     }

@@ -8,11 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **gui/**: 新增原生 Win32 图形界面（C++17 / Win32 API，MinGW 静态编译单文件约 280 KB，无运行时依赖）：一键安装、完整安装（含 hooks）、检查更新、更新、卸载；实时彩色日志、版本状态卡片、忙碌进度条；版本检查使用 WinHTTP 直连官方 GCS，子进程通过 Job Object 管理，关闭窗口时同步终止；「更新」按钮仅在检测到新版本时可点击
+- **setup-claude.ps1**: 新增 `-Uninstall` 卸载模式——自动检测 native / winget / npm 安装并移除本体；删除本工具部署的 10 个 hooks 与 status_line；从 `settings.json` 清理引用这些文件的 hook 组与 statusLine（保留用户其他字段）；从 `.claude.json` 移除 `installMethod`；删除前统一备份到 `~/.claude/backups/uninstall-<时间戳>/`；仅当 `~/.local/bin` 为空时才移除该目录与用户 PATH 项；检测到 `claude` 进程运行时中止
+- **setup-claude.ps1**: 新增 `-NoUpdateCheck`（安装时跳过"发现新版本是否升级"交互）与 `-SettingsStrategy`（`fresh` / `overwrite` / `merge` / `skip` / `cancel`，已有 settings.json 时跳过交互），供 GUI 与自动化调用
 - **setup-claude.ps1**: native 二进制下载改为同步流式 + 实时进度条（`Write-Progress`，显示已下载/总量 MB 与百分比），并提示目标版本、大小、总超时；总超时由 `-InstallTimeout` 统一控制（替代原后台 Job，Job 无法在主控制台显示进度）
 - **setup-claude.ps1**: hooks 部署改为并行下载（`ForEach-Object -Parallel`，并发 4 + 指数退避重试 2/5/10 秒 + 随机 jitter），Full 模式下载 10 hooks + status_line 大幅提速
 - **setup-claude.ps1**: 检测到已安装 Claude Code 且存在新版时，提示并询问是否立即升级（默认升级，回车即执行；输 n 跳过；选是走 `-Upgrade` 同款升级流程；网络/版本解析异常时静默不阻塞安装）
 
 ### Changed
+- **AGENTS.md**: 以上游 claude-code 版本为基底重写——移除误留的 Codex-bootstrap 表述（`setup-Codex.ps1`、`~/.Codex`、Gitee 双平台同步规范），恢复精简的 AI 工作指南结构（核心文件 / 验证命令 / 编码规范 / hooks 三处同步 / 已知坑），并补入本地新增的 `gui/`、`-Uninstall`、`-NoUpdateCheck`、`-SettingsStrategy` 说明
 - **平台**: 停用 Gitee 镜像仓库与双平台同步，主攻 GitHub——`install.ps1` 移除 Gitee 下载源（bootstrap 引导与主脚本下载均只走 GitHub raw）、README 移除 Gitee 徽章/国内镜像安装命令/智能镜像选源说明、AGENTS.md 双仓库同步规范改为单一仓库（本地已移除 gitee remote）
 - **setup-claude.ps1**: 升级（`-Upgrade` 或交互升级）从"仅 native"改为三级兜底：native 失败自动降级 winget（微软 CDN，国内可达性通常优于 GCS）→ npm；指定精确版本（`-ClaudeVersion`）时仍只走 native（winget/npm 的 manifest 收录滞后，无法保证精确版本可装）；升级后版本未变化时给出旧安装残留提示
 - **setup-claude.ps1**: native 安装默认等待超时从 60 秒调至 180 秒、下载单次请求超时从 60 秒调至 300 秒（win32-x64 二进制约 215MB，60 秒需要 3.5MB/s+ 平均速度，普通网络/VPN 下极易超时）；`-InstallTimeout` 可继续自定义
